@@ -1,0 +1,12 @@
+# 小瓜 · 喂饭陪伴 Agent 运行依赖
+#
+# 运行时仅依赖 Python 3.9+ 标准库,不装任何第三方包也能启动
+# (server.py / agent.py / llm.py 默认用系统 curl 或标准库 urllib 发请求)。
+#
+# 下面是可选增强依赖,缺失时会自动降级,不影响功能:
+#
+#   certifi —— llm.py 在 curl 失败、回退到 urllib 时,用它提供更完整的
+#              CA 证书,缓解个别机器上偶发的 SSL 握手问题;缺失则退回系统默认证书。
+#
+# 安装可选依赖:  pip install -r requirements.txt
+certifi>=2023.7.22

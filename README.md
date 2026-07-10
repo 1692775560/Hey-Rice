@@ -1,6 +1,6 @@
 # 小瓜 · 喂饭陪伴 Agent(代码骨架)
 
-用 Claude Opus 做意图识别,区分「命令」和「对话」:
+用中转的 Claude 模型(默认快模型 Haiku,可切 Opus,见 `config.py` / `.env.example`)做意图识别,区分「命令」和「对话」:
 - **命令** → 调用对应的机械臂动作(现在是 mock,等真实动作 API 直接替换)
 - **对话** → 用「小瓜」人设(温柔家人感)温柔回话
 
@@ -25,6 +25,13 @@ export MEALMATE_API_KEY=你的密钥
 # 可选:export MEALMATE_API_BASE=https://api.inferera.com/v1
 ```
 
+**最简方式 · 一键脚本**
+```bash
+./run.sh          # 启动 Web 服务(默认 http://127.0.0.1:8000)
+./run.sh cli      # 命令行交互模式
+./run.sh cli "喂我吃饭吧"   # 命令行单句模式
+```
+
 **方式 A · 前台聊天页面(推荐,可视化对话)**
 ```bash
 python server.py
@@ -39,6 +46,16 @@ python agent.py "喂我吃饭吧"    # 单句模式
 ```
 
 只依赖 Python 标准库,无需 pip install。密钥留在后端,前端页面永远拿不到。
+
+## 跑测试
+
+离线单元测试,不联网、不需要真实密钥(用 dummy 占位即可):
+
+```bash
+MEALMATE_API_KEY=dummy python -m unittest discover -s tests -v
+```
+
+覆盖:意图 JSON 抠取与收容校验、本地快路径规则、喂饭状态机(FEED_FIRST / FEED_CONTINUE / STOP_FEED)、偏好去重落盘。需要 LLM 的路径用打桩替换,验证异常/非 JSON 一律安全兜底为对话,绝不误触发命令。
 
 ## 文件结构
 
