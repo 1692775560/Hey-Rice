@@ -102,22 +102,29 @@ def _process_voice_text(text: str) -> dict:
 
 
 def _run_voice_gateway() -> None:
-    from voice_gateway import VoiceGateway
-
     try:
+        from voice_gateway import VoiceGateway
+
         asyncio.run(VoiceGateway(VOICE_CONFIG).serve_forever())
+    except ModuleNotFoundError as exc:
+        print(f"[voice] 语音网关未启动:缺少依赖 {exc.name}(先 pip install -r requirements.txt)")
     except Exception as exc:  # noqa: BLE001
         print(f"[voice] 语音网关停止: {type(exc).__name__}")
 
 
 def _run_embedded_agent() -> None:
-    from agent_ws_client import AgentWsClient
+    try:
+        from agent_ws_client import AgentWsClient
 
-    host = VOICE_CONFIG.websocket_host
-    if host in {"0.0.0.0", "::"}:
-        host = "127.0.0.1"
-    url = f"ws://{host}:{VOICE_CONFIG.websocket_port}/ws/agent"
-    asyncio.run(AgentWsClient(url, _process_voice_text).run_forever())
+        host = VOICE_CONFIG.websocket_host
+        if host in {"0.0.0.0", "::"}:
+            host = "127.0.0.1"
+        url = f"ws://{host}:{VOICE_CONFIG.websocket_port}/ws/agent"
+        asyncio.run(AgentWsClient(url, _process_voice_text).run_forever())
+    except ModuleNotFoundError as exc:
+        print(f"[voice] 内置 agent 未启动:缺少依赖 {exc.name}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[voice] 内置 agent 停止: {type(exc).__name__}")
 
 
 def start_voice_services() -> None:
