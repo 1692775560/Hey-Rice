@@ -24,6 +24,15 @@
 - `tests/` 离线单元测试(标准库 unittest,共 42 例):覆盖意图 JSON 抠取与收容校验、
   本地快路径、喂饭状态机(FEED_FIRST/FEED_CONTINUE/STOP_FEED)、偏好去重落盘;
   LLM 路径用打桩替换,不联网、不需真实密钥。
+- 后端 `GET /api/health` 健康检查:回报服务状态、三个模型、是否已配置密钥、会话数、
+  运行时长;不含任何密钥值。
+- 后端多会话隔离:按 session id(请求体 `session` > Cookie `mm_session` > 自动新建)
+  各自维护 `FeedingState` 与 `PreferenceMemory`,默认会话兼容旧的单会话行为,
+  其它会话偏好落盘到 `data/sessions/<id>.json`;session id 做文件名收敛,防路径穿越。
+- 后端 `POST /api/reset` 支持可选 `clearPreferences`,一并遗忘该会话已学到的偏好;
+  `PreferenceMemory` 新增可注入落盘路径与 `clear_saved()`。
+- `tests/test_server.py`:会话路由/隔离、路径穿越防护、health 载荷的离线单元测试
+  (测试总数增至 53 例)。
 
 ### Changed
 - `.env.example` 与 `config.py` 默认值对齐(模型默认 Haiku、超时 12 秒、重试 1 次等),

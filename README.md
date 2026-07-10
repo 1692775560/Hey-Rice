@@ -57,6 +57,20 @@ MEALMATE_API_KEY=dummy python -m unittest discover -s tests -v
 
 覆盖:意图 JSON 抠取与收容校验、本地快路径规则、喂饭状态机(FEED_FIRST / FEED_CONTINUE / STOP_FEED)、偏好去重落盘。需要 LLM 的路径用打桩替换,验证异常/非 JSON 一律安全兜底为对话,绝不误触发命令。
 
+## HTTP 接口
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/` | 前端聊天页面(index.html) |
+| GET | `/api/health` | 健康检查:服务状态、模型、是否已配置密钥、会话数、运行时长(不含任何密钥) |
+| POST | `/api/chat` | `{"text": "...", "session"?: "..."}` → 意图识别 + 命令调动作 / 对话回话 |
+| POST | `/api/reset` | `{"session"?: "...", "clearPreferences"?: true}` → 重置这顿饭状态,可选一并遗忘该会话偏好 |
+
+**多会话隔离**:每个浏览器/患者按 session id 各自维护喂饭状态与偏好记忆,互不串味。
+session id 来源优先级:请求体 `session` > Cookie(`mm_session`)> 自动新建并回种 Cookie。
+默认会话(`session=default`)沿用原来的 `preferences_store.json`,兼容旧的单会话行为;
+其它会话的偏好各自落盘在 `data/sessions/<id>.json`(已在 `.gitignore` 忽略)。
+
 ## 文件结构
 
 | 文件 | 作用 |

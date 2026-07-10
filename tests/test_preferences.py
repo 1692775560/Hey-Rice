@@ -75,6 +75,18 @@ class PreferenceMemoryTest(unittest.TestCase):
         self.assertIn("temperature", summary)
         self.assertIn("不要太烫", summary)
 
+    def test_clear_saved_wipes_memory_and_file(self):
+        mem = PreferenceMemory()
+        mem.pending = [{"category": "taste", "value": "喜欢清淡"}]
+        mem.finalize_meal()
+        self.assertTrue(mem.saved)
+        mem.clear_saved()
+        self.assertEqual(mem.saved, [])
+        self.assertEqual(mem.pending, [])
+        # 落盘也应被清空:新实例从同一文件读回空列表
+        reloaded = PreferenceMemory()
+        self.assertEqual(reloaded.saved, [])
+
     def test_observe_extracts_food_preference(self):
         preferences.chat = lambda **kwargs: '{"preferences":[{"category":"taste","value":"喜欢清淡"}]}'
         mem = PreferenceMemory()

@@ -46,7 +46,9 @@ EXTRACT_PROMPT = """\
 
 
 class PreferenceMemory:
-    def __init__(self):
+    def __init__(self, store_path: str | None = None):
+        # 落盘路径可注入:多会话时每个会话各用一份文件;默认沿用模块级 STORE_PATH。
+        self.store_path: str = store_path or STORE_PATH
         # 本顿饭累积的偏好(结束时落盘)
         self.pending: list[dict] = []
         # 已落盘的历史偏好(启动时加载)
@@ -92,6 +94,16 @@ class PreferenceMemory:
         self._persist()
         return newly
 
+    # ---- 遗忘已学到的偏好(reset 按需调用)----
+    def clear_saved(self) -> None:
+        """清空已落盘的历史偏好(内存 + 文件),并丢弃本顿未落盘的累积。
+
+        用于患者/护理者主动要求"忘掉之前记录的吃饭偏好"的场景。
+        """
+        self.saved = []
+        self.pending = []
+        self._persist()
+
     # ---- 给对话 LLM 的偏好摘要(让小瓜记得患者喜好)----
     def summary_for_prompt(self) -> str:
         if not self.saved:
@@ -102,14 +114,17 @@ class PreferenceMemory:
     # ---- 持久化 ----
     def _load(self) -> list[dict]:
         try:
-            with open(STORE_PATH, "r", encoding="utf-8") as f:
+            with open(self.store_path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             return []
 
     def _persist(self) -> None:
         try:
-            with open(STORE_PATH, "w", encoding="utf-8") as f:
+            parent = os.path.dirname(self.store_path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            with open(self.store_path, "w", encoding="utf-8") as f:
                 json.dump(self.saved, f, ensure_ascii=False, indent=2)
         except OSError:
             pass
