@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>小瓜 · 喂饭陪伴对话</title>
+<style>
+  :root {
+    --bg: #f7f0e4;
+    --paper: #fffaf3;
+    --text: #221812;
+    --muted: #70594f;
+    --accent: #d65a31;
+    --teal: #1d6d73;
+    --gold: #f2bf5e;
+    --line: rgba(96,65,48,.14);
+    --bubble-user: linear-gradient(135deg, #d65a31, #ea7b44);
+    --bubble-bot: #fffaf3;
+    --shadow: 0 12px 40px rgba(70,34,16,.12);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    font-family: "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    color: var(--text);
+    background:
+      radial-gradient(circle at top left, rgba(242,191,94,.35), transparent 32%),
+      radial-gradient(circle at right 20%, rgba(29,109,115,.16), transparent 30%),
+      linear-gradient(180deg,#f5eee2,#f7f0e4 45%,#f3ecdf);
+    display: flex; justify-content: center; padding: 24px 14px;
+  }
+  .app { width: min(100%, 640px); display: flex; flex-direction: column; height: calc(100vh - 48px); }
+
+  header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 20px; margin-bottom: 14px;
+    background: rgba(255,250,243,.8); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,.5); border-radius: 22px; box-shadow: var(--shadow);
+  }
+  .avatar {
+    width: 52px; height: 52px; border-radius: 16px; flex: none;
+    display: grid; place-items: center; font-size: 28px;
+    background: linear-gradient(135deg, var(--gold), var(--accent));
+  }
+  header h1 { margin: 0; font-size: 1.3rem; }
+  header p { margin: 2px 0 0; color: var(--muted); font-size: .86rem; }
+  .status-pill {
+    margin-left: auto; font-size: .78rem; color: var(--teal); font-weight: 700;
+    background: rgba(29,109,115,.1); padding: 7px 12px; border-radius: 999px; text-align: right;
+  }
+
+  .chat {
+    flex: 1; overflow-y: auto; padding: 6px 4px 4px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .row { display: flex; gap: 10px; align-items: flex-end; }
+  .row.user { flex-direction: row-reverse; }
+  .mini-avatar {
+    width: 34px; height: 34px; border-radius: 11px; flex: none; display: grid;
+    place-items: center; font-size: 18px;
+  }
+  .mini-avatar.bot { background: linear-gradient(135deg,var(--gold),var(--accent)); }
+  .mini-avatar.user { background: rgba(29,109,115,.16); }
+  .bubble {
+    max-width: 78%; padding: 12px 16px; line-height: 1.6; border-radius: 18px;
+    box-shadow: var(--shadow); font-size: 1rem;
+  }
+  .user .bubble { background: var(--bubble-user); color: #fffaf4; border-bottom-right-radius: 6px; }
+  .bot  .bubble { background: var(--bubble-bot); border: 1px solid var(--line); border-bottom-left-radius: 6px; }
+
+  /* 意图/动作提示卡(演示用,直观展示后台判断) */
+  .meta {
+    align-self: flex-start; max-width: 88%;
+    font-size: .82rem; color: var(--muted);
+    background: rgba(255,255,255,.55); border: 1px dashed var(--line);
+    border-radius: 14px; padding: 8px 12px; line-height: 1.55;
+  }
+  .meta .tag { display: inline-block; font-weight: 700; padding: 1px 8px; border-radius: 999px; margin-right: 6px; }
+  .tag.cmd  { background: rgba(214,90,49,.14); color: var(--accent); }
+  .tag.talk { background: rgba(29,109,115,.14); color: var(--teal); }
+  .meta code { background: rgba(96,65,48,.08); padding: 1px 6px; border-radius: 6px; }
+
+  .composer {
+    margin-top: 12px; display: flex; gap: 10px; align-items: flex-end;
+    padding: 12px; background: rgba(255,250,243,.86); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,.5); border-radius: 22px; box-shadow: var(--shadow);
+  }
+  textarea {
+    flex: 1; resize: none; border: none; outline: none; background: transparent;
+    font: inherit; color: var(--text); max-height: 120px; padding: 8px 6px; line-height: 1.5;
+  }
+  .send {
+    flex: none; border: none; cursor: pointer; color: #fffaf4; font-weight: 700;
+    padding: 0 22px; height: 46px; border-radius: 14px;
+    background: linear-gradient(135deg,var(--accent),#ea7b44);
+    transition: transform .15s ease, opacity .15s ease;
+  }
+  .send:hover { transform: translateY(-1px); }
+  .send:disabled { opacity: .5; cursor: default; transform: none; }
+  .hint { text-align: center; color: var(--muted); font-size: .78rem; margin: 8px 0 0; }
+  .quick { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .quick button {
+    border: 1px solid var(--line); background: rgba(255,255,255,.5); color: var(--muted);
+    border-radius: 999px; padding: 6px 12px; font-size: .82rem; cursor: pointer;
+  }
+  .quick button:hover { color: var(--text); background: rgba(214,90,49,.08); }
+  .typing { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="avatar">🍚</div>
+    <div>
+      <h1>小瓜</h1>
+      <p>陪你慢慢吃饭的伙伴 · 温柔家人感</p>
+    </div>
+    <div class="status-pill" id="statusPill">状态:还没取餐</div>
+  </header>
+
+  <div class="chat" id="chat">
+    <div class="row bot">
+      <div class="mini-avatar bot">🍚</div>
+      <div class="bubble">你好呀,我是小瓜~ 想吃饭了就跟我说一声,咱们慢慢来。</div>
+    </div>
+  </div>
+
+  <div class="composer">
+    <textarea id="input" rows="1" placeholder="对小瓜说点什么…(回车发送,Shift+回车换行)"></textarea>
+    <button class="send" id="send">发送</button>
+  </div>
+  <div class="quick" id="quick">
+    <button data-t="喂我吃饭吧">喂我吃饭吧</button>
+    <button data-t="再来一口">再来一口</button>
+    <button data-t="不吃了,够了">不吃了</button>
+    <button data-t="今天天气真好啊">闲聊一句</button>
+    <button data-t="别停">别停</button>
+  </div>
+  <p class="hint">意图识别与对话由两个 LLM 分别处理;命令会触发机械臂动作(当前为演示)。</p>
+</div>
+
+<script>
+const chat = document.getElementById('chat');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('send');
+const statusPill = document.getElementById('statusPill');
+
+function addBubble(text, who) {
+  const row = document.createElement('div');
+  row.className = 'row ' + who;
+  row.innerHTML = `<div class="mini-avatar ${who}">${who === 'bot' ? '🍚' : '🙂'}</div>
+                   <div class="bubble"></div>`;
+  row.querySelector('.bubble').textContent = text;
+  chat.appendChild(row);
+  chat.scrollTop = chat.scrollHeight;
+  return row;
+}
+
+function addMeta(data) {
+  const el = document.createElement('div');
+  el.className = 'meta';
+  if (data.type === 'COMMAND') {
+    const steps = data.action && data.action.steps ? data.action.steps.join(' → ') : '—';
+    el.innerHTML = `<span class="tag cmd">命令</span> 意图 <code>${data.intent}</code> · 置信 ${Number(data.confidence).toFixed(2)}<br>
+                    机械臂动作:<code>${steps}</code><br>
+                    <span style="opacity:.8">判断依据:${data.reason || ''}</span>`;
+  } else {
+    el.innerHTML = `<span class="tag talk">对话</span> 置信 ${Number(data.confidence).toFixed(2)}
+                    <br><span style="opacity:.8">判断依据:${data.reason || ''}</span>`;
+  }
+  chat.appendChild(el);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+async function send(text) {
+  if (!text.trim()) return;
+  addBubble(text, 'user');
+  input.value = '';
+  autoresize();
+  sendBtn.disabled = true;
+
+  const typing = addBubble('小瓜正在想…', 'bot');
+  typing.querySelector('.bubble').classList.add('typing');
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ text })
+    });
+    const data = await res.json();
+    typing.remove();
+
+    if (data.error) {
+      addBubble('(出了点小问题:' + data.error + ')', 'bot');
+    } else {
+      addMeta(data);
+      addBubble(data.reply, 'bot');
+      if (data.feedingState) statusPill.textContent = '状态:' + data.feedingState;
+    }
+  } catch (e) {
+    typing.remove();
+    addBubble('(连不上小瓜的后台,请确认服务已启动)', 'bot');
+  } finally {
+    sendBtn.disabled = false;
+    input.focus();
+  }
+}
+
+function autoresize() {
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+}
+
+input.addEventListener('input', autoresize);
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input.value); }
+});
+sendBtn.addEventListener('click', () => send(input.value));
+document.getElementById('quick').addEventListener('click', e => {
+  if (e.target.dataset.t) send(e.target.dataset.t);
+});
+input.focus();
+</script>
+</body>
+</html>
