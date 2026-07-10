@@ -1,0 +1,19 @@
+[Unit]
+Description=Galbot Fleet Robot Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=galbot
+WorkingDirectory=/home/galbot/vla_tree/control_platform
+EnvironmentFile=/etc/galbot/agent.env
+ExecStart=/home/galbot/vla_tree/control_platform/start.sh 7861
+Restart=always
+RestartSec=3
+TimeoutStopSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

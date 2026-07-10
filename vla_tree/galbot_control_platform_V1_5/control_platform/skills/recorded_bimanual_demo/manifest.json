@@ -1,0 +1,89 @@
+{
+  "schema": "galbot-arm-skill/v1",
+  "name": "recorded_bimanual_demo",
+  "version": 1,
+  "description": "由双臂示教轨迹蒸馏的阶段条件关节策略；尚未完成真机交接验证。",
+  "type": "phase_joint_policy",
+  "validated": false,
+  "model": "model.json",
+  "model_sha256": "590425aa3b438ed482b237915bb20c3a7af0506778fe0998815e3e45ad3a1f7d",
+  "joint_groups": [
+    "left_arm",
+    "right_arm"
+  ],
+  "duration_s": 34.05,
+  "default_steps": 80,
+  "max_speed": 0.12,
+  "source": "/Users/tree/Desktop/baai/userdata/znb/arm_follower_data.json",
+  "source_frames": 682,
+  "output_bounds": [
+    [
+      1.7511294841766358,
+      2.051272654533386
+    ],
+    [
+      -1.318915033340454,
+      -1.018579936027527
+    ],
+    [
+      -0.854409658908844,
+      -0.5541705250740051
+    ],
+    [
+      -2.3937584400177,
+      -2.093638038635254
+    ],
+    [
+      -0.5430341601371765,
+      -0.24293816685676575
+    ],
+    [
+      -0.49874120354652407,
+      -0.1986452102661133
+    ],
+    [
+      -0.24537001699209213,
+      0.05489352494478225
+    ],
+    [
+      -1.9140042304992675,
+      0.3018628299236298
+    ],
+    [
+      0.3408720850944519,
+      1.3254355430603026
+    ],
+    [
+      -0.4099632740020752,
+      1.148789072036743
+    ],
+    [
+      1.4096994161605836,
+      2.554109001159668
+    ],
+    [
+      0.3111299335956573,
+      1.8343351125717162
+    ],
+    [
+      -0.5554749011993408,
+      0.22482924312353134
+    ],
+    [
+      -0.8662725925445557,
+      0.3031578749418259
+    ]
+  ],
+  "metrics": {
+    "rmse_rad": 0.007884310864457974,
+    "max_abs_error_rad": 0.07120004506814448,
+    "source_bytes": 288475,
+    "model_bytes": 14951
+  },
+  "safety": {
+    "requires_collision_check": true,
+    "requires_operator_validation": true,
+    "open_loop": true,
+    "allowed_for_handover": false
+  }
+}

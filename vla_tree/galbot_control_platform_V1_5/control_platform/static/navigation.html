@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Galbot VLA Tree 控制平台</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0b0f14;color:#e7edf3;font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;height:100vh;display:grid;grid-template-rows:48px 1fr;overflow:hidden}
+header{display:flex;align-items:center;gap:12px;padding:0 16px;background:#151b23;border-bottom:1px solid #2b3542}
+.brand{font-weight:700}.pill{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:#91a4b7;background:#202936;border:1px solid #334155;border-radius:999px;padding:3px 9px}.ok{color:#42d392}.warn{color:#f3b340}.err{color:#ff6b66}.spacer{flex:1}
+main{display:grid;grid-template-columns:290px minmax(0,1fr) 340px;min-height:0}
+aside,.right{background:#111720;border-right:1px solid #273241;overflow:auto;padding:14px}.right{border-right:0;border-left:1px solid #273241}
+.section{margin-bottom:16px}.head{font-size:11px;color:#7f93a8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;border-bottom:1px solid #273241;padding-bottom:6px}
+.btnrow{display:flex;gap:7px;flex-wrap:wrap}.btn{height:30px;border:1px solid #334155;background:#17202b;color:#e7edf3;border-radius:6px;padding:0 10px;cursor:pointer;font:12px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.btn:hover{background:#202b38}.btn.primary{border-color:#1c8062;background:#0e503f;color:#b8f3df}.btn.danger{border-color:#73302f;color:#ffaaa5}
+.field{display:grid;grid-template-columns:60px 1fr;gap:8px;align-items:center;margin-bottom:8px}.field label{color:#8fa2b6;font-size:12px}.field input{width:100%;background:#0d131b;border:1px solid #334155;border-radius:6px;color:#e7edf3;padding:6px 8px;font:12px ui-monospace,SFMono-Regular,Menlo,monospace}
+.toggle{display:flex;align-items:center;gap:8px;margin:8px 0;color:#8fa2b6;font-size:12px}.toggle input{accent-color:#42d392}
+.loc{border:1px solid #2b3542;border-radius:6px;padding:8px 9px;margin-bottom:6px;cursor:pointer;background:#151c26}.loc:hover,.loc.active{border-color:#42d392}.loc small{display:block;color:#7f93a8;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:2px}
+.maparea{position:relative;min-width:0;background:#080c11;overflow:hidden}
+#map,.map3d{position:absolute;inset:0;width:100%;height:100%;display:block}.map3d{display:none;z-index:1;pointer-events:none}
+.hud{position:absolute;left:14px;top:14px;display:flex;gap:8px;flex-wrap:wrap;z-index:2}.hud .pill{background:rgba(17,23,32,.82);backdrop-filter:blur(8px)}
+.viewbar{position:absolute;right:14px;top:14px;display:flex;gap:6px;z-index:4}
+.robot,.goal{position:absolute;z-index:3;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;--yaw:0rad}.robot{width:16px;height:16px;background:#42d392;border:2px solid #0c5d47;box-shadow:0 0 0 8px rgba(66,211,146,.12)}.goal{width:13px;height:13px;background:#f3b340;border:2px solid #7a4f07;display:none;box-shadow:0 0 0 7px rgba(243,179,64,.12)}
+.robot::after,.goal::after{content:"";position:absolute;left:50%;top:50%;height:2px;transform-origin:0 50%;transform:rotate(var(--yaw));border-radius:2px}.robot::after{width:24px;background:#42d392}.goal::after{width:28px;background:#f3b340}
+.status{color:#8fa2b6;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;word-break:break-all}.log{height:210px;overflow:auto;background:#0d131b;border:1px solid #273241;border-radius:6px;padding:8px;font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace}.line{white-space:pre-wrap}.legend{display:grid;grid-template-columns:12px 1fr;gap:5px 8px;color:#8fa2b6;font-size:12px}.sw{width:11px;height:11px;border-radius:2px;margin-top:3px}
+.camera{width:100%;aspect-ratio:16/9;object-fit:cover;background:#080c11;border:1px solid #273241;border-radius:6px;display:block}.slot{border:1px solid #273241;border-radius:6px;background:#0d131b;padding:9px;margin-bottom:8px}.slot b{display:block;font-size:12px;margin-bottom:3px}.slot span{color:#7f93a8;font-size:11px}
+.mini{height:27px;font-size:11px}.fleet-grid{display:grid;grid-template-columns:1fr;gap:6px}.fleet-row{display:grid;grid-template-columns:58px 1fr;gap:6px;align-items:center}.fleet-row label{font-size:11px;color:#8fa2b6}.fleet-row input{background:#0d131b;border:1px solid #334155;border-radius:6px;color:#e7edf3;padding:5px 7px;font:11px ui-monospace,SFMono-Regular,Menlo,monospace}
+@media(max-width:980px){main{grid-template-columns:1fr;grid-template-rows:auto 520px auto}aside,.right{border:0;border-bottom:1px solid #273241}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Galbot VLA Tree 控制平台</div>
+  <span class="pill" id="navMode">连接中</span>
+  <span class="pill" id="pathInfo">vla_tree</span>
+  <div class="spacer"></div>
+  <button class="btn danger" onclick="stopNav()">停止导航</button>
+</header>
+<main>
+  <aside>
+    <div class="section">
+      <div class="head">地图</div>
+      <label class="toggle"><input id="globalMapToggle" type="checkbox" checked onchange="toggleGlobalMap(this.checked)">使用全局地图</label>
+      <div class="btnrow">
+        <button class="btn primary" onclick="loadDefaultPcd()">加载全局 PCD</button>
+        <button class="btn" onclick="document.getElementById('pcdFile').click()">上传 PCD</button>
+        <button class="btn" onclick="clearMap()">清空</button>
+        <input id="pcdFile" type="file" accept=".pcd" style="display:none" onchange="uploadPcd(this.files[0])">
+      </div>
+      <p class="status" id="mapStatus">未加载点云</p>
+    </div>
+    <div class="section">
+      <div class="head">导航控制</div>
+      <div class="field"><label>X</label><input id="goalX" type="number" value="0" step="0.05"></div>
+      <div class="field"><label>Y</label><input id="goalY" type="number" value="0" step="0.05"></div>
+      <div class="field"><label>Yaw</label><input id="goalYaw" type="number" value="0" step="0.05"></div>
+      <div class="btnrow">
+        <button class="btn primary" onclick="sendGoal()">导航到目标</button>
+        <button class="btn" onclick="setGoalFromInputs()">应用目标</button>
+        <button class="btn" onclick="startHeadingPick()">选择朝向</button>
+        <button class="btn" onclick="startFrontierExplore()">自主探索</button>
+        <button class="btn" onclick="startLocalMappingExplore()">局部探索建图</button>
+        <button class="btn" onclick="stopFrontierExplore()">停止探索</button>
+      </div>
+    </div>
+    <div class="section">
+      <div class="head">图例</div>
+      <div class="legend">
+        <span class="sw" style="background:#3b82f6"></span><span>点云</span>
+        <span class="sw" style="background:#42d392"></span><span>实时/探索边界</span>
+        <span class="sw" style="background:#f3b340"></span><span>目标和路径</span>
+        <span class="sw" style="background:#ff6b66"></span><span>frontier 候选</span>
+      </div>
+    </div>
+  </aside>
+  <section class="maparea" id="mapWrap" onclick="clickMap(event)">
+    <canvas id="map"></canvas>
+    <div class="map3d" id="map3d"></div>
+    <div class="hud">
+      <span class="pill" id="pointCount">0 pts</span>
+      <span class="pill" id="boundaryCount">边界 0</span>
+      <span class="pill" id="reachableCount">可达 0</span>
+      <span class="pill" id="obstacleCount">障碍 0</span>
+      <span class="pill" id="coverage">覆盖 0%</span>
+      <span class="pill" id="poseText">pose --</span>
+    </div>
+    <div class="viewbar">
+      <button class="btn mini" onclick="setMapView('2d')">2D</button>
+      <button class="btn mini" onclick="setMapView('3d')">3D</button>
+    </div>
+    <div class="robot" id="robot" style="left:50%;top:50%"></div>
+    <div class="goal" id="goal"></div>
+  </section>
+  <aside class="right">
+    <div class="section">
+      <div class="head">主视角摄像头</div>
+      <img class="camera" id="mainCamera" src="/api/camera/main" alt="front head camera">
+      <p class="status" id="cameraStatus">front_head_camera / main view</p>
+    </div>
+    <div class="section">
+      <div class="head">世界模型 / 多机协同</div>
+      <div class="slot"><b>World Model Context</b><span id="worldModelStatus">预留: camera + map + pose + frontier</span></div>
+      <div class="slot">
+        <b>Multi-Robot Coordination</b>
+        <div class="fleet-grid">
+          <div class="fleet-row"><label>Robot A</label><input id="fleetIp1" value="127.0.0.1:7861"></div>
+          <div class="fleet-row"><label>Robot B</label><input id="fleetIp2" placeholder="192.168.1.12:7861"></div>
+          <div class="fleet-row"><label>Robot C</label><input id="fleetIp3" placeholder="192.168.1.13:7861"></div>
+          <div class="fleet-row"><label>任务</label><input id="fleetTask" placeholder="共同探索当前区域并共享地图"></div>
+          <div class="btnrow">
+            <button class="btn mini" onclick="connectFleet()">连接三机</button>
+            <button class="btn mini" onclick="pingFleet()">心跳检测</button>
+            <button class="btn mini primary" onclick="dispatchFleetTask()">协同执行</button>
+          </div>
+        </div>
+        <span id="fleetStatus">预留: robot_id, shared map, task allocation</span>
+      </div>
+    </div>
+    <div class="section">
+      <div class="head">预设点位</div>
+      <div id="locList"></div>
+    </div>
+    <div class="section">
+      <div class="head">系统状态</div>
+      <p class="status" id="sysStatus">--</p>
+    </div>
+    <div class="section">
+      <div class="head">日志</div>
+      <div class="log" id="log"></div>
+    </div>
+  </aside>
+</main>
+<script type="module">
+import * as THREE from '/static/vendor/three.module.min.js';
+
+const mount = document.getElementById('map3d');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x080c11);
+const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 1000);
+camera.position.set(0, -150, 105);
+camera.lookAt(0, 0, 0);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(window.devicePixelRatio || 1);
+mount.appendChild(renderer.domElement);
+scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+const grid = new THREE.GridHelper(180, 18, 0x334155, 0x1f2937);
+grid.rotation.x = Math.PI / 2;
+scene.add(grid);
+const root = new THREE.Group();
+scene.add(root);
+
+function resize3d(){
+  const r = mount.getBoundingClientRect();
+  renderer.setSize(Math.max(1, r.width), Math.max(1, r.height), false);
+  camera.aspect = Math.max(1, r.width) / Math.max(1, r.height);
+  camera.updateProjectionMatrix();
+}
+function makeLine(points, color, z=0.4){
+  if (!points || points.length < 2) return null;
+  const arr = [];
+  points.forEach(p => arr.push((p.x-50)*1.7, (50-p.y)*1.7, z));
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+  return new THREE.LineLoop(geo, new THREE.LineBasicMaterial({color}));
+}
+function update3d(detail){
+  root.clear();
+  const pts = detail.points || [];
+  const stride = Math.max(1, Math.floor(pts.length / 14000));
+  const arr = [];
+  const colors = [];
+  for(let i=0;i<pts.length;i+=stride){
+    const p = pts[i];
+    arr.push((p.x-50)*1.7, (50-p.y)*1.7, Math.max(-8, Math.min(28, (p.z||0)*5)));
+    colors.push(0.23, 0.55, 1.0);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  root.add(new THREE.Points(geo, new THREE.PointsMaterial({size:1.4, vertexColors:true})));
+  const boundary = makeLine(detail.boundary || [], 0x42d392, 1.2);
+  if (boundary) root.add(boundary);
+  const reachable = makeLine(detail.reachableBoundary || [], 0xf3b340, 2.4);
+  if (reachable) root.add(reachable);
+  (detail.obstacles || []).forEach(o => {
+    const line = makeLine(o.hull || [], 0xff6b66, 4);
+    if (line) root.add(line);
+  });
+  if (detail.frontier) {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(2.6, 16, 12),
+      new THREE.MeshBasicMaterial({color:0xff6b66})
+    );
+    mesh.position.set((detail.frontier.x-50)*1.7, (50-detail.frontier.y)*1.7, 7);
+    root.add(mesh);
+  }
+  resize3d();
+  renderer.render(scene, camera);
+}
+function animate(){
+  requestAnimationFrame(animate);
+  if (mount.style.display !== 'none') {
+    root.rotation.z += 0.0012;
+    renderer.render(scene, camera);
+  }
+}
+window.addEventListener('map3d:update', e => update3d(e.detail || {}));
+window.addEventListener('resize', resize3d);
+resize3d();
+animate();
+</script>
+<script>
+const API = '/api';
+const CONTROL_TOKEN = new URLSearchParams(location.search).get('token') || localStorage.getItem('galbot_control_token') || '';
+const nativeFetch = window.fetch.bind(window);
+window.fetch = (input, init = {}) => {
+  const headers = new Headers(init.headers || {});
+  if (CONTROL_TOKEN) headers.set('Authorization', 'Bearer ' + CONTROL_TOKEN);
+  return nativeFetch(input, {...init, headers});
+};
+const state = {
+  points: [],
+  mapPoints: [],
+  boundary: [],
+  reachableBoundary: [],
+  obstacles: [],
+  frontier: null,
+  path: [],
+  locations: [],
+  robotPose: [0,0,0,0,0,0,1],
+  robotMap: {x:50,y:50},
+  goal: null,
+  bounds: {minX:-5,maxX:5,minY:-5,maxY:5},
+  imported: null,
+  savedGlobalMap: null,
+  globalMapEnabled: true,
+  exploring: false,
+  exploreTimer: null,
+  headingPick: false,
+  mapView: '2d',
+  navReady: false,
+};
+
+function log(msg, cls='') {
+  const box = document.getElementById('log');
+  const el = document.createElement('div');
+  el.className = 'line ' + cls;
+  el.textContent = new Date().toTimeString().slice(0,8) + '  ' + msg;
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+  while (box.children.length > 250) box.removeChild(box.firstChild);
+}
+function clamp(v,min,max){return Math.max(min,Math.min(max,v))}
+function yawToQuat(yaw){return [0,0,Math.sin(yaw/2),Math.cos(yaw/2)]}
+function quatToYaw(p){return Math.atan2(2*p[6]*p[5],1-2*p[5]*p[5])}
+function poseToMap(x,y){
+  const b = state.bounds;
+  return {
+    x: clamp((x - b.minX) / Math.max(.001, b.maxX - b.minX) * 100, 0, 100),
+    y: clamp((1 - (y - b.minY) / Math.max(.001, b.maxY - b.minY)) * 100, 0, 100)
+  };
+}
+function mapToPose(x,y){
+  const b = state.bounds;
+  return {
+    x: b.minX + x / 100 * (b.maxX - b.minX),
+    y: b.minY + (1 - y / 100) * (b.maxY - b.minY)
+  };
+}
+function fitBounds(points, extra=[]){
+  const xs = points.map(p=>+p[0]).filter(Number.isFinite);
+  const ys = points.map(p=>+p[1]).filter(Number.isFinite);
+  extra.forEach(p => { if (p.pose) { xs.push(+p.pose[0]); ys.push(+p.pose[1]); } });
+  xs.push(0); ys.push(0);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const padX = Math.max(.5, (maxX-minX)*.06);
+  const padY = Math.max(.5, (maxY-minY)*.06);
+  state.bounds = {minX:minX-padX, maxX:maxX+padX, minY:minY-padY, maxY:maxY+padY};
+}
+function cross(o,a,b){return (a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x)}
+function convexHull(points){
+  const pts = points.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y))
+    .sort((a,b)=>a.x===b.x?a.y-b.y:a.x-b.x);
+  if (pts.length <= 3) return pts;
+  const lower = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length-2], lower[lower.length-1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i=pts.length-1;i>=0;i--) {
+    const p = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length-2], upper[upper.length-1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  lower.pop(); upper.pop();
+  return lower.concat(upper);
+}
+function remapPoints(){
+  state.mapPoints = state.points.map(p => {
+    const m = poseToMap(+p[0], +p[1]);
+    return {x:m.x,y:m.y,z:+p[2]||0};
+  });
+  updateBoundary();
+  updateObstacleShapes();
+  updateReachableBoundary();
+}
+function updateBoundary(){
+  if (state.mapPoints.length < 3) {
+    state.boundary = [];
+    return;
+  }
+  // Use a deterministic convex hull. This fixes the old failure mode where
+  // boundary bins stayed stale after importing a large global PCD.
+  const stride = Math.max(1, Math.floor(state.mapPoints.length / 3500));
+  state.boundary = convexHull(state.mapPoints.filter((_,i)=>i%stride===0));
+}
+function pointInPoly(p, poly){
+  let inside = false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const a=poly[i], b=poly[j];
+    if(((a.y>p.y)!==(b.y>p.y)) && p.x < (b.x-a.x)*(p.y-a.y)/((b.y-a.y)||.0001)+a.x) inside=!inside;
+  }
+  return inside;
+}
+function pointDensity(p, radius=7){
+  let count = 0;
+  const r2 = radius * radius;
+  const step = Math.max(1, Math.floor(state.mapPoints.length / 5000));
+  for(let i=0;i<state.mapPoints.length;i+=step){
+    const q = state.mapPoints[i];
+    const dx = q.x-p.x, dy = q.y-p.y;
+    if(dx*dx + dy*dy <= r2) count++;
+  }
+  return count;
+}
+function updateObstacleShapes(){
+  const cells = new Map();
+  const cell = 4;
+  state.mapPoints.forEach(p => {
+    const key = `${Math.floor(p.x/cell)},${Math.floor(p.y/cell)}`;
+    const item = cells.get(key) || {points:[], maxZ:-Infinity};
+    item.points.push(p);
+    item.maxZ = Math.max(item.maxZ, p.z || 0);
+    cells.set(key, item);
+  });
+  const occupied = new Set();
+  for (const [key,item] of cells) {
+    if (item.points.length >= 6 || item.maxZ > 0.22) occupied.add(key);
+  }
+  const seen = new Set();
+  const obstacles = [];
+  for (const key of occupied) {
+    if (seen.has(key)) continue;
+    const stack = [key], component = [];
+    seen.add(key);
+    while(stack.length){
+      const cur = stack.pop();
+      component.push(cur);
+      const [cx,cy] = cur.split(',').map(Number);
+      [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy]) => {
+        const nk = `${cx+dx},${cy+dy}`;
+        if (occupied.has(nk) && !seen.has(nk)) { seen.add(nk); stack.push(nk); }
+      });
+    }
+    if (component.length < 3) continue;
+    const pts = [];
+    component.forEach(k => {
+      const [cx,cy] = k.split(',').map(Number);
+      pts.push({x:cx*cell,y:cy*cell},{x:(cx+1)*cell,y:cy*cell},{x:(cx+1)*cell,y:(cy+1)*cell},{x:cx*cell,y:(cy+1)*cell});
+    });
+    const hull = convexHull(pts);
+    if (hull.length > 2) obstacles.push({hull, cells:component.length});
+  }
+  state.obstacles = obstacles.sort((a,b)=>b.cells-a.cells).slice(0,12);
+}
+function obstacleClearance(p){
+  if(!state.obstacles.length) return 99;
+  return Math.min(...state.obstacles.map(o => {
+    const c = o.hull.reduce((a,q)=>({x:a.x+q.x,y:a.y+q.y}),{x:0,y:0});
+    c.x /= o.hull.length; c.y /= o.hull.length;
+    const radius = Math.max(...o.hull.map(q => Math.hypot(q.x-c.x,q.y-c.y)));
+    return Math.hypot(p.x-c.x,p.y-c.y) - radius;
+  }));
+}
+function updateReachableBoundary(){
+  if(state.boundary.length < 3){ state.reachableBoundary = []; return; }
+  const center = state.boundary.reduce((a,p)=>({x:a.x+p.x,y:a.y+p.y}),{x:0,y:0});
+  center.x/=state.boundary.length; center.y/=state.boundary.length;
+  state.reachableBoundary = state.boundary.map(p => {
+    const vx=center.x-p.x, vy=center.y-p.y, len=Math.hypot(vx,vy)||1;
+    return {x:clamp(p.x+vx/len*5,2,98), y:clamp(p.y+vy/len*5,2,98)};
+  }).filter(p => pointInPoly(p,state.boundary) && obstacleClearance(p) > 4 && Math.hypot(p.x-state.robotMap.x,p.y-state.robotMap.y) < 72 && pointDensity(p,8) < 80);
+}
+function setRobotFromPose(pose){
+  state.robotPose = pose || [0,0,0,0,0,0,1];
+  state.robotMap = poseToMap(+state.robotPose[0]||0, +state.robotPose[1]||0);
+  const el = document.getElementById('robot');
+  el.style.left = state.robotMap.x + '%';
+  el.style.top = state.robotMap.y + '%';
+  el.style.setProperty('--yaw', `${-quatToYaw(state.robotPose)}rad`);
+  document.getElementById('poseText').textContent = `pose ${(+state.robotPose[0]).toFixed(2)}, ${(+state.robotPose[1]).toFixed(2)}`;
+}
+function draw(){
+  const canvas = document.getElementById('map');
+  const wrap = document.getElementById('mapWrap');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = wrap.getBoundingClientRect();
+  canvas.width = Math.max(1, Math.floor(rect.width*dpr));
+  canvas.height = Math.max(1, Math.floor(rect.height*dpr));
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  const w=rect.width,h=rect.height;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#080c11'; ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='rgba(80,100,125,.22)'; ctx.lineWidth=1;
+  for(let x=0;x<w;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}
+  for(let y=0;y<h;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}
+  ctx.fillStyle='rgba(59,130,246,.62)';
+  const step = Math.max(1, Math.floor(state.mapPoints.length / 12000));
+  for(let i=0;i<state.mapPoints.length;i+=step){
+    const p=state.mapPoints[i];
+    ctx.fillRect(p.x/100*w-1,p.y/100*h-1,2,2);
+  }
+  if(state.boundary.length>2){
+    ctx.strokeStyle='#42d392'; ctx.lineWidth=2; ctx.beginPath();
+    state.boundary.forEach((p,i)=>{const x=p.x/100*w,y=p.y/100*h; i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+    ctx.closePath(); ctx.stroke();
+  }
+  if(state.reachableBoundary.length>2){
+    ctx.strokeStyle='#f3b340'; ctx.lineWidth=2; ctx.setLineDash([7,5]); ctx.beginPath();
+    state.reachableBoundary.forEach((p,i)=>{const x=p.x/100*w,y=p.y/100*h; i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+    ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
+  }
+  state.obstacles.forEach(o => {
+    if(o.hull.length<3) return;
+    ctx.strokeStyle='rgba(255,107,102,.95)'; ctx.fillStyle='rgba(255,107,102,.10)'; ctx.lineWidth=1.5; ctx.beginPath();
+    o.hull.forEach((p,i)=>{const x=p.x/100*w,y=p.y/100*h; i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  });
+  if(state.frontier){
+    ctx.fillStyle='#ff6b66'; ctx.beginPath();
+    ctx.arc(state.frontier.x/100*w,state.frontier.y/100*h,6,0,Math.PI*2); ctx.fill();
+  }
+  if(state.path.length>1){
+    ctx.strokeStyle='#f3b340'; ctx.lineWidth=2; ctx.beginPath();
+    state.path.forEach((p,i)=>{const x=p.x/100*w,y=p.y/100*h; i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+    ctx.stroke();
+  }
+  document.getElementById('pointCount').textContent = `${state.mapPoints.length} pts`;
+  document.getElementById('boundaryCount').textContent = `边界 ${state.boundary.length}`;
+  document.getElementById('reachableCount').textContent = `可达 ${state.reachableBoundary.length}`;
+  document.getElementById('obstacleCount').textContent = `障碍 ${state.obstacles.length}`;
+  document.getElementById('coverage').textContent = `覆盖 ${Math.min(100, Math.round(state.mapPoints.length/90))}%`;
+  window.dispatchEvent(new CustomEvent('map3d:update', {detail: {
+    points: state.mapPoints,
+    boundary: state.boundary,
+    reachableBoundary: state.reachableBoundary,
+    obstacles: state.obstacles,
+    frontier: state.frontier
+  }}));
+}
+function setMapView(view){
+  state.mapView = view;
+  document.getElementById('map').style.display = view === '2d' ? 'block' : 'none';
+  document.getElementById('map3d').style.display = view === '3d' ? 'block' : 'none';
+  draw();
+}
+function applyMapData(data){
+  state.imported = data;
+  state.savedGlobalMap = data;
+  state.globalMapEnabled = true;
+  const toggle = document.getElementById('globalMapToggle');
+  if (toggle) toggle.checked = true;
+  state.points = data.points || [];
+  fitBounds(state.points, state.locations);
+  remapPoints();
+  setRobotFromPose(state.robotPose);
+  draw();
+  document.getElementById('mapStatus').textContent =
+    `已加载 ${data.source} · ${data.sampled_points}/${data.total_points} · X[${data.bounds.min_x},${data.bounds.max_x}] Y[${data.bounds.min_y},${data.bounds.max_y}]`;
+  log(`PCD 加载成功: ${data.sampled_points}/${data.total_points}, boundary=${state.boundary.length}`, 'ok');
+}
+function toggleGlobalMap(enabled){
+  state.globalMapEnabled = enabled;
+  if (enabled) {
+    if (state.savedGlobalMap) applyMapData(state.savedGlobalMap);
+    else loadDefaultPcd();
+    return;
+  }
+  state.imported = null;
+  state.points = [];
+  state.mapPoints = [];
+  state.boundary = [];
+  state.frontier = null;
+  state.path = [];
+  resetLocalBounds();
+  draw();
+  document.getElementById('mapStatus').textContent='全局地图已关闭，可启动局部探索建图';
+  log('全局地图已关闭，切换到局部探索建图模式','warn');
+}
+async function loadDefaultPcd(){
+  state.globalMapEnabled = true;
+  const toggle = document.getElementById('globalMapToggle');
+  if (toggle) toggle.checked = true;
+  document.getElementById('mapStatus').textContent = '正在加载默认 PCD...';
+  try{
+    const r = await fetch(API+'/nav/map/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.msg||'加载失败');
+    applyMapData(d);
+  }catch(e){document.getElementById('mapStatus').textContent='加载失败: '+e.message; log('PCD 加载失败: '+e.message,'err')}
+}
+async function uploadPcd(file){
+  if(!file) return;
+  const fd = new FormData(); fd.append('file', file);
+  try{
+    const r = await fetch(API+'/nav/map/import',{method:'POST',body:fd});
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.msg||'解析失败');
+    applyMapData(d);
+  }catch(e){log('上传 PCD 失败: '+e.message,'err')}
+  finally{document.getElementById('pcdFile').value=''}
+}
+function clearMap(){
+  state.points=[]; state.mapPoints=[]; state.boundary=[]; state.frontier=null; state.path=[]; state.imported=null; draw();
+  document.getElementById('mapStatus').textContent='已清空点云';
+}
+function resetLocalBounds(){
+  const x = +state.robotPose[0] || 0;
+  const y = +state.robotPose[1] || 0;
+  state.bounds = {minX:x-4, maxX:x+4, minY:y-4, maxY:y+4};
+  setRobotFromPose(state.robotPose);
+}
+function setGoalMap(mx,my,yaw=0,label='地图点'){
+  const pose = mapToPose(mx,my);
+  state.goal = {mx,my,x:pose.x,y:pose.y,yaw,label};
+  document.getElementById('goalX').value = pose.x.toFixed(3);
+  document.getElementById('goalY').value = pose.y.toFixed(3);
+  document.getElementById('goalYaw').value = yaw.toFixed(3);
+  const el = document.getElementById('goal');
+  el.style.display='block'; el.style.left=mx+'%'; el.style.top=my+'%';
+  el.style.setProperty('--yaw', `${-yaw}rad`);
+  state.path=[state.robotMap,{x:mx,y:my}];
+  draw();
+  log(`目标 ${label}: ${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}, yaw=${yaw.toFixed(2)}`);
+}
+function setGoalFromInputs(){
+  const x=+document.getElementById('goalX').value, y=+document.getElementById('goalY').value, yaw=+document.getElementById('goalYaw').value||0;
+  const m=poseToMap(x,y);
+  setGoalMap(m.x,m.y,yaw,'手动');
+}
+function clickMap(e){
+  const r=e.currentTarget.getBoundingClientRect();
+  const mx=(e.clientX-r.left)/r.width*100, my=(e.clientY-r.top)/r.height*100;
+  if (state.headingPick && state.goal) {
+    const dir = mapToPose(mx, my);
+    const yaw = Math.atan2(dir.y - state.goal.y, dir.x - state.goal.x);
+    state.headingPick = false;
+    setGoalMap(state.goal.mx, state.goal.my, yaw, '朝向已选');
+    log(`目标朝向已更新 yaw=${yaw.toFixed(2)}`, 'ok');
+    return;
+  }
+  const target = mapToPose(mx, my);
+  const yaw=Math.atan2(target.y-(+state.robotPose[1]||0), target.x-(+state.robotPose[0]||0));
+  setGoalMap(mx,my,yaw,'地图点');
+}
+function startHeadingPick(){
+  if(!state.goal){log('先在地图上选择目标点，再选择朝向','warn'); return}
+  state.headingPick = true;
+  log('朝向选择中：在地图上点击目标要面向的方向','warn');
+}
+async function sendGoal(){
+  if(!state.goal) setGoalFromInputs();
+  const q=yawToQuat(state.goal.yaw);
+  const pose=[state.goal.x,state.goal.y,0,...q];
+  try{
+    const r=await fetch(API+'/nav/goto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pose})});
+    const d=await r.json();
+    if(!d.ok) throw new Error(d.msg||'导航失败');
+    log('导航指令已发送: '+JSON.stringify(pose.map(v=>+v.toFixed(3))),'ok');
+    simulateArrive();
+  }catch(e){log('导航失败: '+e.message,'err')}
+}
+function simulateArrive(){
+  const start={...state.robotMap}, end={x:state.goal.mx,y:state.goal.my};
+  let t=0;
+  const timer=setInterval(()=>{
+    t=Math.min(1,t+.05);
+    state.robotMap={x:start.x+(end.x-start.x)*t,y:start.y+(end.y-start.y)*t};
+    const pose=mapToPose(state.robotMap.x,state.robotMap.y);
+    state.robotPose=[pose.x,pose.y,0,...yawToQuat(state.goal.yaw)];
+    document.getElementById('robot').style.left=state.robotMap.x+'%';
+    document.getElementById('robot').style.top=state.robotMap.y+'%';
+    document.getElementById('poseText').textContent=`pose ${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}`;
+    draw();
+    if(t>=1){clearInterval(timer); log('到达目标点', 'ok'); if(state.exploring) setTimeout(exploreStep, 350)}
+  },70);
+}
+function pickFrontier(){
+  updateReachableBoundary();
+  const boundary = state.reachableBoundary.length > 2 ? state.reachableBoundary : state.boundary;
+  if(boundary.length<3) return null;
+  const center = boundary.reduce((a,p)=>({x:a.x+p.x,y:a.y+p.y}),{x:0,y:0});
+  center.x/=boundary.length; center.y/=boundary.length;
+  const candidates = boundary.map((p,i)=>{
+    const prev=boundary[(i-1+boundary.length)%boundary.length], next=boundary[(i+1)%boundary.length];
+    const edge=Math.hypot(next.x-prev.x,next.y-prev.y);
+    const vx=center.x-p.x, vy=center.y-p.y, len=Math.hypot(vx,vy)||1;
+    const goal={x:clamp(p.x+vx/len*6,2,98), y:clamp(p.y+vy/len*6,2,98)};
+    const travel=Math.hypot(goal.x-state.robotMap.x, goal.y-state.robotMap.y);
+    const density=state.mapPoints.filter(q=>Math.hypot(q.x-goal.x,q.y-goal.y)<8).length;
+    return {...goal, score:edge*2+travel*.25-density*.5, travel};
+  }).filter(c=>c.travel>6 && pointInPoly(c,state.boundary) && obstacleClearance(c)>4).sort((a,b)=>b.score-a.score);
+  return candidates[0] || null;
+}
+function addExploredPointsAroundRobot(){
+  const pose = mapToPose(state.robotMap.x,state.robotMap.y);
+  const b=state.bounds;
+  const span=Math.max(b.maxX-b.minX,b.maxY-b.minY);
+  for(let i=0;i<140;i++){
+    const a=Math.random()*Math.PI*2, r=(.04+Math.random()*.10)*span;
+    state.points.push([pose.x+Math.cos(a)*r, pose.y+Math.sin(a)*r, 0]);
+  }
+  fitBounds(state.points, state.globalMapEnabled ? state.locations : []);
+  remapPoints();
+}
+function ensureLocalSeed(){
+  if(state.mapPoints.length >= 10) return;
+  resetLocalBounds();
+  addExploredPointsAroundRobot();
+  addExploredPointsAroundRobot();
+  document.getElementById('mapStatus').textContent='局部探索地图生成中';
+}
+async function exploreStep(){
+  if(!state.exploring) return;
+  ensureLocalSeed();
+  const f=pickFrontier();
+  state.frontier=f;
+  if(!f){log('没有可用 frontier，探索停止','warn'); stopFrontierExplore(); return}
+  const pose=mapToPose(f.x,f.y);
+  const yaw=Math.atan2(f.y-state.robotMap.y,f.x-state.robotMap.x);
+  setGoalMap(f.x,f.y,yaw,'Frontier');
+  addExploredPointsAroundRobot();
+  log(`frontier: ${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}, score=${f.score.toFixed(1)}`);
+  await sendGoal();
+}
+function startFrontierExplore(){
+  if(state.exploring) return;
+  state.exploring=true;
+  log('自主探索启动：根据当前点云凸包边界选择 frontier','ok');
+  exploreStep();
+}
+function startLocalMappingExplore(){
+  state.globalMapEnabled = false;
+  const toggle = document.getElementById('globalMapToggle');
+  if (toggle) toggle.checked = false;
+  clearMap();
+  resetLocalBounds();
+  ensureLocalSeed();
+  state.exploring = false;
+  log('局部探索建图启动：全局地图已关闭，从当前位置创建边界地图','ok');
+  startFrontierExplore();
+}
+function stopFrontierExplore(){
+  state.exploring=false;
+  state.frontier=null;
+  draw();
+  log('自主探索已停止','warn');
+}
+async function stopNav(){
+  stopFrontierExplore();
+  try{await fetch(API+'/nav/stop',{method:'POST'}); log('停止导航已发送','warn')}catch(e){log('停止导航失败: '+e.message,'err')}
+}
+function fleetInputs(){
+  return [1,2,3].map(i => {
+    const value = document.getElementById('fleetIp'+i).value.trim();
+    return value ? {id:'robot_'+i, name:'Robot '+i, ip:value, role:i===1?'leader':'worker'} : null;
+  }).filter(Boolean);
+}
+function renderFleetStatus(robots){
+  const text = (robots || []).map(r => `${r.name}:${r.status || 'unknown'}@${r.url}`).join(' | ') || '未配置机器人';
+  document.getElementById('fleetStatus').textContent = text;
+}
+async function connectFleet(){
+  const robots = fleetInputs();
+  try{
+    const r = await fetch(API+'/fleet/robots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({robots})});
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.msg||'连接失败');
+    renderFleetStatus(d.robots);
+    log(`已配置多机协同: ${d.robots.length} 台`, 'ok');
+  }catch(e){log('多机配置失败: '+e.message,'err')}
+}
+async function pingFleet(){
+  try{
+    const r = await fetch(API+'/fleet/ping',{method:'POST'});
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.msg||'心跳失败');
+    renderFleetStatus(d.robots);
+    log('多机心跳: '+d.robots.map(x=>`${x.id}:${x.status}`).join(', '), 'ok');
+  }catch(e){log('多机心跳失败: '+e.message,'err')}
+}
+async function dispatchFleetTask(){
+  const description = document.getElementById('fleetTask').value.trim() || '共同探索当前区域并共享地图';
+  const assignments = {};
+  fleetInputs().forEach((r,i)=>{assignments[r.id] = i===0 ? 'lead_mapping_and_task_split' : `explore_frontier_sector_${i}`});
+  const goal = state.goal ? {x:state.goal.x,y:state.goal.y,yaw:state.goal.yaw} : {};
+  try{
+    const r = await fetch(API+'/fleet/task',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      description,
+      mode:'cooperative_mapping_navigation',
+      goal,
+      assignments,
+      map_summary:{points:state.mapPoints.length,boundary:state.boundary.length,reachable:state.reachableBoundary.length,obstacles:state.obstacles.length}
+    })});
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.msg||'任务下发失败');
+    log('协同任务已下发: '+description, 'ok');
+    document.getElementById('fleetStatus').textContent = d.deliveries.map(x=>`${x.robot}:${x.ok?'sent':'fail'}`).join(' | ') || '本机已记录任务';
+  }catch(e){log('协同任务失败: '+e.message,'err')}
+}
+function renderLocations(){
+  const box=document.getElementById('locList');
+  box.innerHTML=state.locations.map(l=>`<div class="loc" onclick="selectLocation('${l.key.replace(/'/g,'')}')"><b>${l.id??''}. ${l.name}</b><small>${l.key} · ${(+l.pose[0]).toFixed(2)}, ${(+l.pose[1]).toFixed(2)}</small></div>`).join('');
+}
+function selectLocation(key){
+  const l=state.locations.find(x=>x.key===key); if(!l) return;
+  const m=poseToMap(+l.pose[0],+l.pose[1]);
+  setGoalMap(m.x,m.y,l.yaw||quatToYaw(l.pose),l.name);
+}
+async function init(){
+  window.addEventListener('resize', draw);
+  setInterval(() => {
+    const img = document.getElementById('mainCamera');
+    if (img) img.src = '/api/camera/main?t=' + Date.now();
+  }, 2000);
+  try{
+    const s=await (await fetch(API+'/status')).json();
+    state.navReady=!!s.nav_ready;
+    document.getElementById('navMode').textContent=s.nav_ready?'真机导航':'模拟模式';
+    document.getElementById('navMode').className='pill '+(s.nav_ready?'ok':'warn');
+    document.getElementById('pathInfo').textContent=s.location_map || 'location_map';
+    document.getElementById('sysStatus').textContent=JSON.stringify(s,null,2);
+    if(Array.isArray(s.pose)) setRobotFromPose(s.pose);
+  }catch(e){log('状态读取失败: '+e.message,'err')}
+  try{
+    const d=await (await fetch(API+'/nav/locations')).json();
+    if(d.ok){state.locations=d.locations||[]; renderLocations(); fitBounds(state.points,state.locations); remapPoints(); draw(); log('点位加载: '+d.source,'ok')}
+  }catch(e){log('点位加载失败: '+e.message,'err')}
+  draw();
+  loadDefaultPcd();
+}
+init();
+</script>
+</body>
+</html>

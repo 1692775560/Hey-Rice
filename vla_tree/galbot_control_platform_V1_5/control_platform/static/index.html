@@ -1,0 +1,3212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Galbot G1 控制平台</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.5.0/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--surface:#1a2332;
+  --border:#30363d;--border2:#3d4d5e;
+  --text:#e6edf3;--text2:#8b949e;--text3:#4a6a8a;
+  --green:#3fb950;--green-d:#0f6e56;--green-dim:rgba(52,201,138,.12);
+  --orange:#d29922;--orange-dim:rgba(210,153,34,.12);
+  --blue:#2f81f7;--blue-dim:rgba(47,129,247,.12);
+  --red:#f85149;--red-dim:rgba(248,81,73,.12);
+  --purple:#bc8cff;
+  --r:6px;--r2:10px;
+  --mono:'JetBrains Mono','Cascadia Code','Consolas',monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.5;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── TOPBAR ── */
+.topbar{height:50px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 18px;flex-shrink:0}
+.topbar-logo{width:28px;height:28px;background:linear-gradient(135deg,var(--blue),var(--purple));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff}
+.topbar-title{font-size:14px;font-weight:600;flex:1}
+.mode-group{display:flex;border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.mode-btn{padding:4px 14px;font-size:11.5px;cursor:pointer;background:none;border:none;color:var(--text2);font-family:var(--sans);transition:all .12s}
+.mode-btn.active{background:var(--bg3);color:var(--text);font-weight:500}
+.conn-badge{display:flex;align-items:center;gap:6px;padding:3px 10px;background:var(--bg3);border-radius:20px;font-size:11.5px;color:var(--text2)}
+.conn-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);transition:background .3s}
+.conn-dot.sim{background:var(--green)}
+.conn-dot.live{background:#1D9E75;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.estop-btn{display:flex;align-items:center;gap:5px;padding:5px 14px;border-radius:var(--r);border:1px solid #5c1a1a;color:var(--red);background:rgba(248,81,73,.08);font-size:12px;font-weight:500;cursor:pointer;font-family:var(--sans);transition:all .12s}
+.estop-btn:hover{background:rgba(248,81,73,.18)}
+.estop-btn:active{transform:scale(.97)}
+
+/* ── SHELL ── */
+.shell{flex:1;display:grid;grid-template-columns:210px 1fr;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+.sidebar-section{padding:10px 0 4px}
+.sidebar-label{padding:0 14px 5px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text3)}
+.nav-btn{display:flex;align-items:center;gap:9px;width:100%;padding:7px 14px;border:none;border-left:2px solid transparent;background:none;font-family:var(--sans);font-size:12.5px;color:var(--text2);cursor:pointer;text-align:left;transition:all .1s}
+.nav-btn:hover{background:var(--bg3);color:var(--text)}
+.nav-btn.active{background:var(--bg3);color:var(--green);border-left-color:var(--green);font-weight:500}
+.nav-btn i{font-size:15px;width:16px;text-align:center}
+.nav-badge{margin-left:auto;font-size:9px;padding:1px 5px;background:var(--surface);border-radius:3px;color:var(--text3)}
+.sidebar-footer{margin-top:auto;padding:12px}
+.sdk-card{background:var(--bg3);border-radius:var(--r2);padding:10px 12px;border:1px solid var(--border)}
+.sdk-label{font-size:10px;color:var(--text3);margin-bottom:3px}
+.sdk-val{font-size:11.5px;font-family:var(--mono);color:var(--text2)}
+.sys-status{font-size:11px;margin-top:5px;display:flex;align-items:center;gap:5px}
+
+/* ── MAIN ── */
+.main{overflow-y:auto;padding:16px 20px 24px;background:var(--bg)}
+.panel{display:none}.panel.active{display:block}
+
+/* ── STAT ROW ── */
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:10px 14px}
+.stat-label{font-size:10.5px;color:var(--text2);margin-bottom:3px}
+.stat-val{font-size:16px;font-weight:600;font-family:var(--mono)}
+.stat-val.ok{color:var(--green)}.stat-val.warn{color:var(--orange)}.stat-val.err{color:var(--red)}.stat-val.blue{color:var(--blue)}
+
+/* ── SECTION ── */
+.sec{margin-bottom:16px}
+.sec-head{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.sec-head span{font-weight:400;text-transform:none;letter-spacing:0;color:var(--text2);font-size:11px}
+
+/* ── CHAIN TABS ── */
+.chain-tabs{display:flex;gap:4px;margin-bottom:12px}
+.chain-tab{padding:4px 13px;border-radius:var(--r);border:1px solid var(--border);font-size:11.5px;cursor:pointer;background:none;font-family:var(--mono);color:var(--text2);transition:all .1s}
+.chain-tab:hover{border-color:var(--border2);color:var(--text)}
+.chain-tab.active{background:var(--bg3);color:var(--text);border-color:var(--border2);font-weight:500}
+
+/* ── JOINT GRID ── */
+.joint-tools{display:grid;grid-template-columns:1.2fr .8fr;gap:10px;margin-bottom:12px}
+.task-panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:12px}
+.task-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px}
+.task-head span{font-size:10.5px;color:var(--text3);font-weight:400;font-family:var(--mono)}
+.preset-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.preset-btn{min-height:34px;justify-content:center;padding:6px 8px;text-align:center}
+.nudge-grid{display:grid;grid-template-columns:1fr 86px;gap:8px;margin-bottom:8px}
+.nudge-select{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:12px;padding:6px 8px;outline:none}
+.nudge-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.stepper-btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;border:1px solid var(--border);border-radius:var(--r);background:none;color:var(--text);font-family:var(--sans);font-size:12px;min-height:31px;cursor:pointer;transition:all .12s}
+.stepper-btn:hover{background:var(--bg3);border-color:var(--border2)}
+.inline-status{margin-top:8px;font-size:10.5px;color:var(--text3);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.urdf-twin{display:grid;grid-template-columns:minmax(0,1fr) 210px;gap:10px;margin-bottom:16px}
+.urdf-canvas-wrap{position:relative;height:270px;background:#090e14;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.urdf-canvas-wrap.dragover{border-color:var(--green);background:#0d1815}
+#urdfTwinCanvas{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#urdfTwinCanvas.dragging{cursor:grabbing}
+.urdf-drop-label{position:absolute;left:10px;bottom:8px;color:var(--text3);font-size:10px;pointer-events:none}
+.urdf-control{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px}
+.joint-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 20px}
+.joint-row{display:grid;grid-template-columns:minmax(132px,168px) 1fr 50px;align-items:center;gap:6px;padding:3px 0;border-radius:var(--r)}
+.joint-row.active{background:rgba(47,129,247,.08)}
+.joint-name{font-size:10.5px;color:var(--text2);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.joint-val{font-size:11px;font-family:var(--mono);text-align:right;color:var(--text)}
+input[type=range]{width:100%;accent-color:var(--green)}
+
+/* ── EE FIELDS ── */
+.field-grid{display:grid;gap:8px;margin-bottom:10px}
+.field-grid-3{grid-template-columns:repeat(3,1fr)}
+.field-grid-4{grid-template-columns:repeat(4,1fr)}
+.field-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px}
+.field-label{font-size:10px;color:var(--text3);margin-bottom:4px}
+.field-input{width:100%;background:none;border:none;font-family:var(--mono);font-size:14px;font-weight:500;color:var(--text);outline:none}
+.field-input:focus{color:var(--blue)}
+
+/* ── GRIPPER ── */
+.gripper-block{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px;margin-bottom:10px}
+.gripper-head{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;font-weight:500}
+.gripper-track{flex:1;height:10px;background:var(--bg3);border-radius:5px;overflow:hidden}
+.gripper-fill{height:100%;background:var(--green);border-radius:5px;transition:width .3s}
+.gripper-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.gripper-side{font-size:11px;color:var(--text2);width:58px;font-family:var(--mono)}
+.gripper-w{font-size:11px;font-family:var(--mono);width:44px;text-align:right;color:var(--text)}
+
+/* ── NAV MAP ── */
+.nav-layout{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:12px}
+.map-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);overflow:hidden;position:relative;height:360px;cursor:crosshair}
+.map-wrap::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 29px,var(--border) 30px),repeating-linear-gradient(90deg,transparent,transparent 29px,var(--border) 30px);opacity:.22;z-index:0}
+.map-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:1;display:block}
+.robot-dot{position:absolute;width:16px;height:16px;background:var(--green);border-radius:50%;transform:translate(-50%,-50%);border:2px solid var(--green-d);z-index:4;transition:left .4s,top .4s;box-shadow:0 0 0 7px rgba(63,185,80,.08)}
+.goal-dot{position:absolute;width:12px;height:12px;background:var(--orange);border-radius:50%;transform:translate(-50%,-50%);z-index:4;border:2px solid #854F0B;display:none;box-shadow:0 0 0 6px rgba(210,153,34,.08)}
+.map-label{position:absolute;font-size:9px;color:var(--text3);white-space:nowrap;z-index:4;pointer-events:none}
+.map-legend{position:absolute;left:10px;bottom:10px;z-index:5;display:flex;gap:8px;flex-wrap:wrap;background:rgba(13,17,23,.78);border:1px solid var(--border);border-radius:var(--r);padding:6px 8px;font-size:10.5px;color:var(--text2);backdrop-filter:blur(6px)}
+.legend-item{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.legend-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--green)}
+.legend-dot.boundary{border-radius:2px;background:transparent;border:2px solid var(--green)}
+.legend-dot.scan{background:var(--blue)}.legend-dot.obs{background:var(--red)}.legend-dot.path{background:var(--orange)}
+.nav-tools{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.nav-editor,.nav-reason{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:12px;min-height:134px}
+.nav-reason.ok{border-color:rgba(63,185,80,.35);background:var(--green-dim)}
+.nav-reason.warn{border-color:rgba(210,153,34,.35);background:var(--orange-dim)}
+.nav-reason.err{border-color:rgba(248,81,73,.35);background:var(--red-dim)}
+.reason-title{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text2)}
+.reason-body{font-size:11.5px;color:var(--text2);line-height:1.55}
+.reason-body ul{padding-left:16px;margin:4px 0 0}
+.loc-list{display:flex;flex-direction:column;gap:5px;max-height:388px;overflow:auto}
+.loc-item{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:7px 10px;cursor:pointer;transition:border-color .1s;font-size:12px}
+.loc-item:hover{border-color:var(--border2)}
+.loc-item.active{border-color:var(--green);color:var(--green)}
+.loc-id{font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:1px}
+.nav-foot{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11.5px}
+.nav-foot-status{color:var(--text2)}
+.nav-foot-pose{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--text3)}
+.map-import-status{margin:8px 0 0;font-size:10.5px;color:var(--text3);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ── SENSOR ── */
+.sensor-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sensor-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:12px}
+.sensor-head{display:flex;align-items:center;gap:7px;margin-bottom:10px;font-size:12.5px;font-weight:500}
+.s-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.cam-preview{width:100%;height:88px;background:var(--bg3);border-radius:var(--r);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:11px;border:1px solid var(--border);overflow:hidden;position:relative}
+.imu-row{display:flex;justify-content:space-between;font-size:11.5px;padding:3px 0;border-bottom:1px solid var(--border)}
+.imu-row:last-child{border-bottom:none}
+.imu-k{color:var(--text2);font-family:var(--mono)}
+.imu-v{font-family:var(--mono);color:var(--text)}
+.lidar-canvas{width:100%;height:96px;display:block}
+
+/* ── VLA ── */
+.vla-config{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px;margin-bottom:10px}
+.vla-progress-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px;margin-bottom:10px}
+.progress-bar{height:5px;background:var(--bg3);border-radius:3px;overflow:hidden;margin:8px 0 4px}
+.progress-fill{height:100%;background:var(--green);border-radius:3px;width:0;transition:width .08s}
+.vla-phase{font-size:11.5px;color:var(--text2)}
+
+/* ── BUTTONS ── */
+.btn-row{display:flex;gap:6px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:var(--r);border:1px solid var(--border);background:none;font-family:var(--sans);font-size:12.5px;color:var(--text);cursor:pointer;transition:all .12s}
+.btn:hover{background:var(--bg3);border-color:var(--border2)}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--green-d);color:#9FE1CB;border-color:rgba(52,201,138,.3)}
+.btn.primary:hover{background:#1D9E75}
+.btn.danger{color:var(--red);border-color:rgba(248,81,73,.3)}
+.btn.danger:hover{background:var(--red-dim)}
+.btn i{font-size:14px}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+
+/* ── LOG ── */
+.log-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;height:130px;overflow-y:auto;font-family:var(--mono);font-size:11.5px;line-height:1.65;margin-top:10px}
+.log-line{padding:0}
+.log-ok{color:var(--green)}.log-warn{color:var(--orange)}.log-err{color:var(--red)}.log-info{color:var(--text2)}.log-cmd{color:var(--blue)}
+
+/* ── IK RESULT ── */
+.ik-result{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;font-family:var(--mono);font-size:11.5px;color:var(--text2);min-height:40px;word-break:break-all}
+.resource-monitor{position:fixed;right:12px;bottom:12px;width:310px;max-height:300px;background:#111720;border:1px solid var(--border);border-radius:6px;z-index:80;box-shadow:0 8px 26px rgba(0,0,0,.35);overflow:hidden}
+.resource-head{height:34px;display:flex;align-items:center;gap:8px;padding:0 9px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;cursor:pointer}
+.resource-summary{margin-left:auto;color:var(--text2);font:10px var(--mono)}
+.resource-body{padding:8px;max-height:264px;overflow:auto}
+.resource-monitor.collapsed{width:250px}.resource-monitor.collapsed .resource-body{display:none}.resource-monitor.collapsed .resource-head{border-bottom:0}
+.resource-row{display:grid;grid-template-columns:44px 48px minmax(0,1fr) 42px;gap:5px;align-items:center;padding:4px 0;border-bottom:1px solid rgba(48,54,61,.55);font:10px var(--mono)}
+.resource-row .proc-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.resource-stop{height:22px;padding:0 5px;border:1px solid #73302f;background:transparent;color:#ffaaa5;border-radius:4px;font-size:10px;cursor:pointer}
+
+@media (max-width: 1040px){
+  .stat-row{grid-template-columns:repeat(2,1fr)}
+  .joint-tools,.nav-layout,.nav-tools{grid-template-columns:1fr}
+  .preset-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="topbar-logo" aria-hidden="true">🤖</div>
+  <span class="topbar-title">Galbot G1 控制平台</span>
+  <div class="mode-group" role="group" aria-label="连接模式">
+    <button class="mode-btn active" id="modeSimBtn" onclick="setMode('sim')">模拟</button>
+    <button class="mode-btn" id="modeLiveBtn" onclick="setMode('live')">真机</button>
+  </div>
+  <div class="conn-badge">
+    <div class="conn-dot sim" id="connDot" aria-hidden="true"></div>
+    <span id="connLabel">模拟模式</span>
+  </div>
+  <button class="estop-btn" onclick="eStop()"><i class="ti ti-alert-triangle" aria-hidden="true"></i> 急停</button>
+</header>
+
+<!-- SHELL -->
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar" aria-label="控制模块">
+    <div class="sidebar-section">
+      <div class="sidebar-label">控制</div>
+      <button class="nav-btn active" onclick="showPanel('joint',this)"><i class="ti ti-adjustments-horizontal" aria-hidden="true"></i>关节控制<span class="nav-badge">EX1·7</span></button>
+      <button class="nav-btn" onclick="showPanel('ee',this)"><i class="ti ti-vector-bezier-2" aria-hidden="true"></i>末端位姿<span class="nav-badge">EX2</span></button>
+      <button class="nav-btn" onclick="showPanel('gripper',this)"><i class="ti ti-hand-grab" aria-hidden="true"></i>夹爪控制<span class="nav-badge">EX5</span></button>
+      <button class="nav-btn" onclick="showPanel('nav-current',this)"><i class="ti ti-map-pin" aria-hidden="true"></i>自主导航<span class="nav-badge">3D</span></button>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">监控</div>
+      <button class="nav-btn" onclick="showPanel('sensor',this)"><i class="ti ti-antenna" aria-hidden="true"></i>传感器<span class="nav-badge">EX4</span></button>
+      <button class="nav-btn" onclick="showPanel('vla',this)"><i class="ti ti-brain" aria-hidden="true"></i>VLA / 轨迹<span class="nav-badge">EX6</span></button>
+    </div>
+    <div class="sidebar-footer">
+      <div class="sdk-card">
+        <div class="sdk-label">SDK 版本</div>
+        <div class="sdk-val">galbot_sdk v1.6.2</div>
+        <div class="sys-status">
+          <div class="conn-dot sim" id="sysStatusDot" aria-hidden="true"></div>
+          <span id="sysStatusText" style="font-size:11px;color:var(--text2)">系统正常</span>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- ══ 关节控制 ══ -->
+    <section class="panel active" id="p-joint" aria-label="关节控制">
+      <div class="stat-row">
+        <div class="stat"><div class="stat-label">控制器</div><div class="stat-val blue" id="ctrlName">JOINT_POS</div></div>
+        <div class="stat"><div class="stat-label">最大速度</div><div class="stat-val" id="speedDisplay">0.10 rad/s</div></div>
+        <div class="stat"><div class="stat-label">超时</div><div class="stat-val">20 s</div></div>
+        <div class="stat"><div class="stat-label">阻塞模式</div><div class="stat-val ok">开启</div></div>
+      </div>
+      <div class="chain-tabs" role="tablist" aria-label="关节组">
+        <button class="chain-tab active" onclick="setChain('left_arm',this)" role="tab">left_arm</button>
+        <button class="chain-tab" onclick="setChain('right_arm',this)" role="tab">right_arm</button>
+        <button class="chain-tab" onclick="setChain('head',this)" role="tab">head</button>
+        <button class="chain-tab" onclick="setChain('leg',this)" role="tab">leg</button>
+      </div>
+      <div class="joint-tools">
+        <div class="task-panel">
+          <div class="task-head">抓取瓶子任务姿态 <span id="taskHint">left_arm</span></div>
+          <div class="preset-grid">
+            <button class="btn preset-btn" onclick="applyJointPreset('bottle_ready')"><i class="ti ti-armchair" aria-hidden="true"></i>预备</button>
+            <button class="btn preset-btn" onclick="applyJointPreset('bottle_reach')"><i class="ti ti-arrow-forward-up" aria-hidden="true"></i>靠近</button>
+            <button class="btn preset-btn" onclick="applyJointPreset('bottle_lift')"><i class="ti ti-arrow-up" aria-hidden="true"></i>抬起</button>
+            <button class="btn preset-btn primary" onclick="runBottleTask()"><i class="ti ti-route" aria-hidden="true"></i>执行流程</button>
+          </div>
+        </div>
+        <div class="task-panel">
+          <div class="task-head">单关节步进 <span id="nudgeChainText">J1</span></div>
+          <div class="nudge-grid">
+            <select class="nudge-select" id="nudgeJointSelect" onchange="highlightJointRow()"></select>
+            <input class="field-input" type="number" id="nudgeStep" value="0.05" min="0.01" max="0.5" step="0.01" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:6px 8px;font-size:12px">
+          </div>
+          <div class="nudge-actions">
+            <button class="stepper-btn" onclick="nudgeSelectedJoint(-1)"><i class="ti ti-minus" aria-hidden="true"></i>减小</button>
+            <button class="stepper-btn" onclick="nudgeSelectedJoint(1)"><i class="ti ti-plus" aria-hidden="true"></i>增大</button>
+          </div>
+          <div class="btn-row" style="margin-top:8px">
+            <button class="btn" onclick="importDefaultUrdf()"><i class="ti ti-robot" aria-hidden="true"></i>默认 URDF</button>
+            <button class="btn" onclick="document.getElementById('urdfFileInput').click()"><i class="ti ti-file-upload" aria-hidden="true"></i>上传 URDF</button>
+            <input id="urdfFileInput" type="file" accept=".urdf,.xml" style="display:none" onchange="importUrdfFile(this.files[0])">
+          </div>
+          <div class="inline-status" id="urdfStatus">使用内置关节模型</div>
+        </div>
+      </div>
+      <div class="urdf-twin">
+        <div class="urdf-canvas-wrap" id="urdfTwinDrop">
+          <canvas id="urdfTwinCanvas" aria-label="可拖动 URDF 机械臂模型"></canvas>
+          <span class="urdf-drop-label">拖入 URDF 文件，或拖动画布关节点</span>
+        </div>
+        <div class="urdf-control">
+          <div class="task-head">URDF 数字孪生 <span id="urdfTwinChain">left_arm</span></div>
+          <div class="status" id="urdfTwinStatus">导入 URDF 后启用拖动</div>
+          <label class="toggle" style="margin-top:12px"><input id="urdfLiveFollow" type="checkbox">低速实时跟随</label>
+          <div class="field-label" style="margin-top:10px">同步速度</div>
+          <input type="range" id="urdfSyncSpeed" min="1" max="12" value="5" step="1">
+          <div class="btn-row" style="margin-top:12px">
+            <button class="btn primary" onclick="syncTwinToRobot(false)"><i class="ti ti-send"></i>同步到真机</button>
+            <button class="btn" onclick="readJoints()"><i class="ti ti-refresh"></i>读取姿态</button>
+          </div>
+          <div class="inline-status">限位来自 URDF · 单步 ≤ 0.25 rad</div>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="sec-head">关节角度 (rad) <span id="chainInfo">7 关节 · left_arm</span></div>
+        <div class="joint-grid" id="jointGrid"></div>
+      </div>
+      <div class="sec">
+        <div class="sec-head">速度限制</div>
+        <div style="display:grid;grid-template-columns:1fr 56px;gap:10px;align-items:center">
+          <input type="range" min="1" max="50" value="10" step="1" id="speedSlider" oninput="updateSpeed(this.value)">
+          <span style="font-family:var(--mono);font-size:12px;color:var(--text)" id="speedNum">0.10 rad/s</span>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" onclick="sendJointCmd()"><i class="ti ti-player-play" aria-hidden="true"></i>发送指令</button>
+        <button class="btn" onclick="resetJoints()"><i class="ti ti-refresh" aria-hidden="true"></i>复位</button>
+        <button class="btn" onclick="readJoints()"><i class="ti ti-download" aria-hidden="true"></i>读取当前</button>
+      </div>
+      <div class="log-box" id="jointLog" aria-label="日志"></div>
+    </section>
+
+    <!-- ══ 末端位姿 ══ -->
+    <section class="panel" id="p-ee" aria-label="末端位姿控制">
+      <div class="chain-tabs" role="tablist">
+        <button class="chain-tab active" onclick="setEEChain('left_arm',this)" role="tab">left_arm</button>
+        <button class="chain-tab" onclick="setEEChain('right_arm',this)" role="tab">right_arm</button>
+      </div>
+      <div class="sec">
+        <div class="sec-head">目标位置 (m) <span>参考系: base_link</span></div>
+        <div class="field-grid field-grid-3">
+          <div class="field-card"><div class="field-label">X (m)</div><input class="field-input" type="number" id="eeX" value="0.1267" step="0.001"></div>
+          <div class="field-card"><div class="field-label">Y (m)</div><input class="field-input" type="number" id="eeY" value="0.2342" step="0.001"></div>
+          <div class="field-card"><div class="field-label">Z (m)</div><input class="field-input" type="number" id="eeZ" value="0.7356" step="0.001"></div>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="sec-head">目标姿态 <span>四元数 [qx, qy, qz, qw]</span></div>
+        <div class="field-grid field-grid-4">
+          <div class="field-card"><div class="field-label">qx</div><input class="field-input" type="number" id="eeQx" value="0.0220" step="0.0001"></div>
+          <div class="field-card"><div class="field-label">qy</div><input class="field-input" type="number" id="eeQy" value="0.0127" step="0.0001"></div>
+          <div class="field-card"><div class="field-label">qz</div><input class="field-input" type="number" id="eeQz" value="0.0343" step="0.0001"></div>
+          <div class="field-card"><div class="field-label">qw</div><input class="field-input" type="number" id="eeQw" value="0.9991" step="0.0001"></div>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="sec-head">IK 求解结果</div>
+        <div class="ik-result" id="ikResult">— 点击 IK 求解后显示关节角</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" onclick="solveIK()"><i class="ti ti-math-function" aria-hidden="true"></i>IK 求解</button>
+        <button class="btn" onclick="setEEPose()"><i class="ti ti-player-play" aria-hidden="true"></i>直接移动</button>
+        <button class="btn" onclick="getEEPose()"><i class="ti ti-download" aria-hidden="true"></i>读取当前</button>
+        <button class="btn" onclick="solveFKBtn()"><i class="ti ti-calculator" aria-hidden="true"></i>FK 验证</button>
+      </div>
+      <div class="log-box" id="eeLog"></div>
+    </section>
+
+    <!-- ══ 夹爪 ══ -->
+    <section class="panel" id="p-gripper" aria-label="夹爪控制">
+
+      <!-- 左夹爪 -->
+      <div class="gripper-block">
+        <div class="gripper-head"><i class="ti ti-hand-grab" aria-hidden="true" style="color:var(--green)"></i>LEFT_GRIPPER</div>
+        <div class="gripper-row">
+          <span class="gripper-side">开合宽度</span>
+          <div class="gripper-track"><div class="gripper-fill" id="lgFill" style="width:80%"></div></div>
+          <span class="gripper-w" id="lgVal">0.080 m</span>
+        </div>
+        <input type="range" min="0" max="100" value="80" step="1" id="lgSlider" oninput="updateGripper('l',this.value)" style="width:100%;margin-bottom:10px">
+        <div class="field-grid field-grid-3" style="margin-bottom:10px">
+          <div class="field-card"><div class="field-label">速度 (m/s)</div><input class="field-input" type="number" id="lgSpeed" value="0.05" step="0.01"></div>
+          <div class="field-card"><div class="field-label">力矩 (N)</div><input class="field-input" type="number" id="lgForce" value="10" step="1"></div>
+          <div class="field-card"><div class="field-label">阻塞</div><select class="field-input" id="lgBlock" style="font-size:12px"><option value="1">True</option><option value="0">False</option></select></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" onclick="sendGripper('l')"><i class="ti ti-player-play" aria-hidden="true"></i>发送</button>
+          <button class="btn" onclick="quickGripper('l',0)"><i class="ti ti-hand-grab" aria-hidden="true"></i>完全闭合</button>
+          <button class="btn" onclick="quickGripper('l',100)"><i class="ti ti-hand-finger" aria-hidden="true"></i>完全打开</button>
+        </div>
+      </div>
+
+      <!-- 右夹爪 -->
+      <div class="gripper-block">
+        <div class="gripper-head"><i class="ti ti-hand-grab" aria-hidden="true" style="color:var(--blue)"></i>RIGHT_GRIPPER</div>
+        <div class="gripper-row">
+          <span class="gripper-side">开合宽度</span>
+          <div class="gripper-track"><div class="gripper-fill" id="rgFill" style="width:80%;background:var(--blue)"></div></div>
+          <span class="gripper-w" id="rgVal">0.080 m</span>
+        </div>
+        <input type="range" min="0" max="100" value="80" step="1" id="rgSlider" oninput="updateGripper('r',this.value)" style="width:100%;margin-bottom:10px">
+        <div class="field-grid field-grid-3" style="margin-bottom:10px">
+          <div class="field-card"><div class="field-label">速度 (m/s)</div><input class="field-input" type="number" id="rgSpeed" value="0.05" step="0.01"></div>
+          <div class="field-card"><div class="field-label">力矩 (N)</div><input class="field-input" type="number" id="rgForce" value="10" step="1"></div>
+          <div class="field-card"><div class="field-label">阻塞</div><select class="field-input" id="rgBlock" style="font-size:12px"><option value="1">True</option><option value="0">False</option></select></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" onclick="sendGripper('r')"><i class="ti ti-player-play" aria-hidden="true"></i>发送</button>
+          <button class="btn" onclick="quickGripper('r',0)"><i class="ti ti-hand-grab" aria-hidden="true"></i>完全闭合</button>
+          <button class="btn" onclick="quickGripper('r',100)"><i class="ti ti-hand-finger" aria-hidden="true"></i>完全打开</button>
+        </div>
+      </div>
+
+      <div class="log-box" id="gripLog"></div>
+    </section>
+
+    <!-- Current navigation workspace is kept intact to avoid regressing 3D map/exploration. -->
+    <section class="panel" id="p-nav-current" aria-label="自主导航">
+      <style>#p-nav-current *{box-sizing:border-box}#p-nav-current .nav-embedded{margin:0;background:#0b0f14;color:#e7edf3;font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;height:100vh;display:grid;grid-template-rows:48px 1fr;overflow:hidden}#p-nav-current .nav-header{display:flex;align-items:center;gap:12px;padding:0 16px;background:#151b23;border-bottom:1px solid #2b3542}#p-nav-current .brand{font-weight:700}#p-nav-current .pill{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:#91a4b7;background:#202936;border:1px solid #334155;border-radius:999px;padding:3px 9px}#p-nav-current .ok{color:#42d392}#p-nav-current .warn{color:#f3b340}#p-nav-current .err{color:#ff6b66}#p-nav-current .spacer{flex:1}#p-nav-current .nav-main{display:grid;grid-template-columns:290px minmax(0,1fr) 340px;min-height:0}#p-nav-current aside,#p-nav-current .right{background:#111720;border-right:1px solid #273241;overflow:auto;padding:14px}#p-nav-current .right{border-right:0;border-left:1px solid #273241}#p-nav-current .section{margin-bottom:16px}#p-nav-current .head{font-size:11px;color:#7f93a8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;border-bottom:1px solid #273241;padding-bottom:6px}#p-nav-current .btnrow{display:flex;gap:7px;flex-wrap:wrap}#p-nav-current .btn{height:30px;border:1px solid #334155;background:#17202b;color:#e7edf3;border-radius:6px;padding:0 10px;cursor:pointer;font:12px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}#p-nav-current .btn:hover{background:#202b38}#p-nav-current .btn.primary{border-color:#1c8062;background:#0e503f;color:#b8f3df}#p-nav-current .btn.danger{border-color:#73302f;color:#ffaaa5}#p-nav-current .field{display:grid;grid-template-columns:60px 1fr;gap:8px;align-items:center;margin-bottom:8px}#p-nav-current .field label{color:#8fa2b6;font-size:12px}#p-nav-current .field input{width:100%;background:#0d131b;border:1px solid #334155;border-radius:6px;color:#e7edf3;padding:6px 8px;font:12px ui-monospace,SFMono-Regular,Menlo,monospace}#p-nav-current .toggle{display:flex;align-items:center;gap:8px;margin:8px 0;color:#8fa2b6;font-size:12px}#p-nav-current .toggle input{accent-color:#42d392}#p-nav-current .loc{border:1px solid #2b3542;border-radius:6px;padding:8px 9px;margin-bottom:6px;cursor:pointer;background:#151c26}#p-nav-current .loc:hover,#p-nav-current .loc.active{border-color:#42d392}#p-nav-current .loc small{display:block;color:#7f93a8;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:2px}#p-nav-current .maparea{position:relative;min-width:0;background:#080c11;overflow:hidden}#p-nav-current #navx-map,#p-nav-current .map3d{position:absolute;inset:0;width:100%;height:100%;display:block}#p-nav-current .map3d{display:none;z-index:1;pointer-events:none}#p-nav-current .hud{position:absolute;left:14px;top:14px;display:flex;gap:8px;flex-wrap:wrap;z-index:2}#p-nav-current .hud .pill{background:rgba(17,23,32,.82);backdrop-filter:blur(8px)}#p-nav-current .viewbar{position:absolute;right:14px;top:14px;display:flex;gap:6px;z-index:4}#p-nav-current .robot,#p-nav-current .goal{position:absolute;z-index:3;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;--yaw:0rad}#p-nav-current .robot{width:16px;height:16px;background:#42d392;border:2px solid #0c5d47;box-shadow:0 0 0 8px rgba(66,211,146,.12)}#p-nav-current .goal{width:13px;height:13px;background:#f3b340;border:2px solid #7a4f07;display:none;box-shadow:0 0 0 7px rgba(243,179,64,.12)}#p-nav-current .robot::after,#p-nav-current .goal::after{content:"";position:absolute;left:50%;top:50%;height:2px;transform-origin:0 50%;transform:rotate(var(--yaw));border-radius:2px}#p-nav-current .robot::after{width:24px;background:#42d392}#p-nav-current .goal::after{width:28px;background:#f3b340}#p-nav-current .status{color:#8fa2b6;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;word-break:break-all}#p-nav-current .log{height:210px;overflow:auto;background:#0d131b;border:1px solid #273241;border-radius:6px;padding:8px;font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace}#p-nav-current .line{white-space:pre-wrap}#p-nav-current .legend{display:grid;grid-template-columns:12px 1fr;gap:5px 8px;color:#8fa2b6;font-size:12px}#p-nav-current .sw{width:11px;height:11px;border-radius:2px;margin-top:3px}#p-nav-current .camera{width:100%;aspect-ratio:16/9;object-fit:cover;background:#080c11;border:1px solid #273241;border-radius:6px;display:block}#p-nav-current .slot{border:1px solid #273241;border-radius:6px;background:#0d131b;padding:9px;margin-bottom:8px}#p-nav-current .slot b{display:block;font-size:12px;margin-bottom:3px}#p-nav-current .slot span{color:#7f93a8;font-size:11px}#p-nav-current .mini{height:27px;font-size:11px}#p-nav-current .fleet-grid{display:grid;grid-template-columns:1fr;gap:6px}#p-nav-current .fleet-row{display:grid;grid-template-columns:58px 1fr;gap:6px;align-items:center}#p-nav-current .fleet-row label{font-size:11px;color:#8fa2b6}#p-nav-current .fleet-row input{background:#0d131b;border:1px solid #334155;border-radius:6px;color:#e7edf3;padding:5px 7px;font:11px ui-monospace,SFMono-Regular,Menlo,monospace}@media(max-width:980px){#p-nav-current .nav-main{grid-template-columns:1fr;grid-template-rows:auto 520px auto}#p-nav-current aside,#p-nav-current .right{border:0;border-bottom:1px solid #273241}}
+
+#p-nav-current{padding:0;overflow:hidden}
+#p-nav-current .viewbar{align-items:center}
+#p-nav-current .viewbar .btn.active{border-color:#ff6b66;background:#542725;color:#ffd2cf}
+#p-nav-current .brush-size{width:86px;accent-color:#ff6b66}
+#p-nav-current .robot{transition:left .18s linear,top .18s linear}
+#p-nav-current .nav-embedded{height:calc(100vh - 92px);min-height:680px;display:grid;grid-template-rows:48px minmax(0,1fr);overflow:hidden;border:1px solid var(--border);border-radius:var(--r)}
+#p-nav-current .nav-main{min-height:0}
+#p-nav-current .mapping-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#p-nav-current .teleop{display:grid;grid-template-columns:repeat(3,34px);grid-template-rows:repeat(3,32px);gap:5px;justify-content:center;margin:10px 0}
+#p-nav-current .teleop .btn{width:34px;padding:0;font-weight:700}
+#p-nav-current .teleop .stop{grid-column:2;grid-row:2;color:#ffaaa5}
+#p-nav-current .mapping-readout{min-height:48px;background:#0d131b;border:1px solid #273241;border-radius:6px;padding:7px;margin-top:7px}
+#p-nav-current .location-create{display:grid;grid-template-columns:1fr auto;gap:6px;margin-bottom:8px}
+#p-nav-current .location-create input{min-width:0;background:#0d131b;border:1px solid #334155;border-radius:6px;color:#e7edf3;padding:6px 8px;font-size:12px}
+#p-nav-current .loc{position:relative;padding-right:34px}
+#p-nav-current .loc-delete{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:24px;height:24px;padding:0;border:1px solid #73302f;background:transparent;color:#ffaaa5;border-radius:4px;cursor:pointer}
+@media(max-width:980px){#p-nav-current .nav-embedded{overflow:auto}#p-nav-current .nav-main{overflow:visible}}
+</style>
+      <div class="nav-embedded"><div class="nav-header">
+  <div class="brand">Galbot VLA Tree 控制平台</div>
+  <span class="pill" id="navx-navMode">连接中</span>
+  <span class="pill" id="navx-pathInfo">vla_tree</span>
+  <div class="spacer"></div>
+  <button class="btn danger" onclick="navCurrent.stopNav()">停止导航</button>
+</div>
+<div class="nav-main">
+  <aside>
+    <div class="section">
+      <div class="head">地图</div>
+      <label class="toggle"><input id="navx-globalMapToggle" type="checkbox" checked onchange="navCurrent.toggleGlobalMap(this.checked)">使用全局地图</label>
+      <div class="btnrow">
+        <button class="btn primary" onclick="navCurrent.loadDefaultPcd()">加载全局 PCD</button>
+        <button class="btn" onclick="document.getElementById('navx-pcdFile').click()">上传 PCD</button>
+        <button class="btn" onclick="navCurrent.clearMap()">清空</button>
+        <input id="navx-pcdFile" type="file" accept=".pcd" style="display:none" onchange="navCurrent.uploadPcd(this.files[0])">
+      </div>
+      <p class="status" id="navx-mapStatus">未加载点云</p>
+    </div>
+    <div class="section">
+      <div class="head">导航控制</div>
+      <div class="field"><label>X</label><input id="navx-goalX" type="number" value="0" step="0.05"></div>
+      <div class="field"><label>Y</label><input id="navx-goalY" type="number" value="0" step="0.05"></div>
+      <div class="field"><label>Yaw</label><input id="navx-goalYaw" type="number" value="0" step="0.05"></div>
+      <div class="btnrow">
+        <button class="btn primary" onclick="navCurrent.sendGoal()">导航到目标</button>
+        <button class="btn" onclick="navCurrent.setGoalFromInputs()">应用目标</button>
+        <button class="btn" onclick="navCurrent.startHeadingPick()">选择朝向</button>
+        <button class="btn" onclick="navCurrent.startFrontierExplore()">自主探索</button>
+        <button class="btn" onclick="navCurrent.startLocalMappingExplore()">局部探索建图</button>
+        <button class="btn" onclick="navCurrent.stopFrontierExplore()">停止探索</button>
+      </div>
+      <div class="field" style="margin-top:8px">
+        <label>脱困</label>
+        <div style="display:grid;grid-template-columns:88px 74px 1fr;gap:6px">
+          <select class="field-input" id="navx-nudgeDirection" title="脱困方向">
+            <option value="forward">向前</option><option value="backward">向后</option>
+            <option value="left">向左</option><option value="right">向右</option>
+          </select>
+          <input id="navx-nudgeDistance" type="number" value="0.30" min="0.05" max="1.00" step="0.05" title="脱困距离（米）">
+          <button class="btn danger" id="navx-nudgeButton" onclick="navCurrent.nudgeForward()" title="切换底盘位姿控制器并按所选方向移动"><i class="ti ti-arrows-move"></i> 执行脱困</button>
+        </div>
+      </div>
+      <label class="toggle"><input id="navx-clickNavigate" type="checkbox" checked onchange="navCurrent.setClickNavigate(this.checked)">点击地图立即导航</label>
+      <label class="toggle"><input id="navx-boundaryOnly" type="checkbox" checked onchange="navCurrent.setBoundaryOnly(this.checked)">仅显示环境边界</label>
+    </div>
+    <div class="section">
+      <div class="head">官方建图 / 遥控</div>
+      <div class="mapping-actions">
+        <button class="btn primary" onclick="navCurrent.startOfficialMapping()">开始建图</button>
+        <button class="btn" onclick="navCurrent.saveMappingAndNavigate()">保存并转导航</button>
+        <button class="btn" onclick="navCurrent.relocalizeCurrent()">重定位</button>
+        <button class="btn danger" onclick="navCurrent.stopOfficialMapping()">停止建图</button>
+      </div>
+      <div class="teleop" aria-label="建图底盘遥控">
+        <button class="btn" data-teleop="q" title="左转 Q">Q</button>
+        <button class="btn" data-teleop="w" title="前进 W">↑</button>
+        <button class="btn" data-teleop="e" title="右转 E">E</button>
+        <button class="btn" data-teleop="a" title="左移 A">←</button>
+        <button class="btn stop" data-teleop="stop" title="停止">■</button>
+        <button class="btn" data-teleop="d" title="右移 D">→</button>
+        <span></span>
+        <button class="btn" data-teleop="s" title="后退 S">↓</button>
+      </div>
+      <div class="mapping-readout status" id="navx-mappingStatus">建图未启动</div>
+    </div>
+    <div class="section">
+      <div class="head">图例</div>
+      <div class="legend">
+        <span class="sw" style="background:#3b82f6"></span><span>点云</span>
+        <span class="sw" style="background:#42d392"></span><span>实时/探索边界</span>
+        <span class="sw" style="background:#f3b340"></span><span>目标和路径</span>
+        <span class="sw" style="background:#ff6b66"></span><span>frontier 候选</span>
+      </div>
+    </div>
+  </aside>
+  <section class="maparea" id="navx-mapWrap" onclick="navCurrent.clickMap(event)">
+    <canvas id="navx-map"></canvas>
+    <div class="map3d" id="navx-map3d"></div>
+    <div class="hud">
+      <span class="pill" id="navx-pointCount">0 pts</span>
+      <span class="pill" id="navx-boundaryCount">边界 0</span>
+      <span class="pill" id="navx-reachableCount">可达 0</span>
+      <span class="pill" id="navx-obstacleCount">障碍 0</span>
+      <span class="pill" id="navx-coverage">覆盖 0%</span>
+      <span class="pill" id="navx-poseText">pose --</span>
+    </div>
+    <div class="viewbar">
+      <button class="btn mini" onclick="navCurrent.setMapView('2d')">2D</button>
+      <button class="btn mini" onclick="navCurrent.setMapView('3d')">3D</button>
+      <button class="btn mini" onclick="navCurrent.zoomMap(0.72)" title="放大地图">+</button>
+      <button class="btn mini" onclick="navCurrent.zoomMap(1.38)" title="缩小地图">−</button>
+      <button class="btn mini" onclick="navCurrent.fitSpatialView()" title="适配全部空间">适配</button>
+      <button class="btn mini" id="navx-eraseToggle" onclick="navCurrent.toggleEraseMode()" title="在2D地图拖动擦除障碍物"><i class="ti ti-eraser"></i> 擦除</button>
+      <input class="brush-size" id="navx-brushSize" type="range" min="0.1" max="1.5" value="0.35" step="0.05" title="擦除半径" oninput="navCurrent.setEraseRadius(this.value)">
+      <button class="btn mini" onclick="navCurrent.exportEditedPcd()" title="导出当前编辑后的点云"><i class="ti ti-download"></i> PCD</button>
+    </div>
+    <div class="robot" id="navx-robot" style="left:50%;top:50%"></div>
+    <div class="goal" id="navx-goal"></div>
+  </section>
+  <aside class="right">
+    <div class="section">
+      <div class="head">主视角摄像头</div>
+      <img class="camera" id="navx-mainCamera" alt="front head camera" style="display:none">
+      <div class="btnrow" style="margin-top:7px"><button class="btn mini" id="navx-mainCameraToggle" onclick="navCurrent.toggleMainCamera()"><i class="ti ti-video"></i> 开启视角</button></div>
+      <p class="status" id="navx-cameraStatus">HEAD_LEFT_CAMERA · 已关闭</p>
+    </div>
+    <div class="section">
+      <div class="head">世界模型 / 多机协同</div>
+      <div class="slot"><b>World Model Context</b><span id="navx-worldModelStatus">预留: camera + map + pose + frontier</span></div>
+      <div class="slot">
+        <b>Multi-Robot Coordination</b>
+        <div class="fleet-grid">
+          <div class="fleet-row"><label>Robot A</label><input id="navx-fleetIp1" value="127.0.0.1:7861"></div>
+          <div class="fleet-row"><label>Robot B</label><input id="navx-fleetIp2" placeholder="192.168.1.12:7861"></div>
+          <div class="fleet-row"><label>Robot C</label><input id="navx-fleetIp3" placeholder="192.168.1.13:7861"></div>
+          <div class="fleet-row"><label>任务</label><input id="navx-fleetTask" placeholder="共同探索当前区域并共享地图"></div>
+          <div class="btnrow">
+            <button class="btn mini" onclick="navCurrent.connectFleet()">连接三机</button>
+            <button class="btn mini" onclick="navCurrent.pingFleet()">心跳检测</button>
+            <button class="btn mini primary" onclick="navCurrent.dispatchFleetTask()">协同执行</button>
+          </div>
+        </div>
+        <span id="navx-fleetStatus">预留: robot_id, shared map, task allocation</span>
+      </div>
+    </div>
+    <div class="section">
+      <div class="head">预设点位</div>
+      <div class="location-create">
+        <input id="navx-locationName" maxlength="40" placeholder="新点位名称">
+        <button class="btn primary" onclick="navCurrent.savePresetLocation()">保存当前目标</button>
+      </div>
+      <div class="status" id="navx-locationOutput">在地图上选择位置，或点击已有点位</div>
+      <div id="navx-locList"></div>
+    </div>
+    <div class="section">
+      <div class="head">系统状态</div>
+      <p class="status" id="navx-sysStatus">--</p>
+    </div>
+    <div class="section">
+      <div class="head">日志</div>
+      <div class="log" id="navx-log"></div>
+    </div>
+  </aside>
+</div>
+</div>
+    </section>
+
+    <!-- Legacy navigation remains in the DOM for its simulation helpers, but is not linked. -->
+    <section class="panel" id="p-nav" aria-label="自主导航">
+      <div class="stat-row">
+        <div class="stat"><div class="stat-label">定位状态</div><div class="stat-val" id="navLocStatus">未定位</div></div>
+        <div class="stat"><div class="stat-label">目标点</div><div class="stat-val blue" id="navGoalDisplay">—</div></div>
+        <div class="stat"><div class="stat-label">导航状态</div><div class="stat-val" id="navRunStatus">待机</div></div>
+        <div class="stat"><div class="stat-label">地图覆盖</div><div class="stat-val ok" id="mapCoverage">0%</div></div>
+      </div>
+      <div class="nav-layout">
+        <div>
+          <div class="sec-head" style="margin-bottom:8px">雷达边界地图 <span id="mapScanText">点击地图设置目标点</span></div>
+          <div class="map-wrap" id="mapWrap" onclick="setNavGoal(event)" role="img" aria-label="导航地图">
+            <canvas class="map-canvas" id="navMapCanvas" aria-label="雷达扫描边界和点云"></canvas>
+            <div class="robot-dot" id="robotDot" style="left:28%;top:62%" aria-label="机器人当前位置"></div>
+            <div class="goal-dot" id="goalDot" aria-label="目标点"></div>
+            <div class="map-legend" aria-hidden="true">
+              <span class="legend-item"><span class="legend-dot boundary"></span>边界</span>
+              <span class="legend-item"><span class="legend-dot scan"></span>点云</span>
+              <span class="legend-item"><span class="legend-dot obs"></span>障碍</span>
+              <span class="legend-item"><span class="legend-dot path"></span>路径</span>
+            </div>
+          </div>
+          <div class="nav-foot">
+            <div class="conn-dot" id="navDot" style="background:var(--text3)" aria-hidden="true"></div>
+            <span class="nav-foot-status" id="navStatusText">未定位</span>
+            <span class="nav-foot-pose" id="robotPoseText"></span>
+          </div>
+          <div class="map-import-status" id="mapImportStatus">全局地图未导入</div>
+          <div class="btn-row" style="margin-top:10px">
+            <button class="btn primary" onclick="startNav()"><i class="ti ti-navigation" aria-hidden="true"></i>开始导航</button>
+            <button class="btn" onclick="checkNavPath()"><i class="ti ti-route" aria-hidden="true"></i>检查路径</button>
+            <button class="btn" onclick="relocalize()"><i class="ti ti-current-location" aria-hidden="true"></i>重定位</button>
+            <button class="btn" onclick="startExplore()"><i class="ti ti-radar" aria-hidden="true"></i>扫描建图</button>
+            <button class="btn" onclick="startFrontierExplore()"><i class="ti ti-route-2" aria-hidden="true"></i>自主探索</button>
+            <button class="btn" onclick="stopExplore()"><i class="ti ti-square-rounded-x" aria-hidden="true"></i>停止扫描</button>
+            <button class="btn" onclick="document.getElementById('pcdFileInput').click()"><i class="ti ti-file-upload" aria-hidden="true"></i>导入 PCD</button>
+            <button class="btn" onclick="importDefaultPcdMap()"><i class="ti ti-map-search" aria-hidden="true"></i>默认全局图</button>
+            <button class="btn danger" onclick="stopNav()"><i class="ti ti-square" aria-hidden="true"></i>停止导航</button>
+            <input id="pcdFileInput" type="file" accept=".pcd" style="display:none" onchange="importPcdMap(this.files[0])">
+          </div>
+          <div class="nav-tools">
+            <div class="nav-editor">
+              <div class="task-head">目标位姿 <span>base_link</span></div>
+              <div class="field-grid field-grid-3">
+                <div class="field-card"><div class="field-label">X (m)</div><input class="field-input" type="number" id="navGoalX" value="0.000" step="0.05" oninput="applyGoalEdit(false)"></div>
+                <div class="field-card"><div class="field-label">Y (m)</div><input class="field-input" type="number" id="navGoalY" value="0.000" step="0.05" oninput="applyGoalEdit(false)"></div>
+                <div class="field-card"><div class="field-label">Yaw (rad)</div><input class="field-input" type="number" id="navGoalYaw" value="0.000" step="0.05"></div>
+              </div>
+              <div class="btn-row">
+                <button class="btn" onclick="applyGoalEdit(true)"><i class="ti ti-adjustments" aria-hidden="true"></i>应用修改</button>
+                <button class="btn" onclick="saveTempLocation()"><i class="ti ti-bookmark-plus" aria-hidden="true"></i>临时点位</button>
+                <button class="btn" onclick="clearNavMap()"><i class="ti ti-eraser" aria-hidden="true"></i>清空扫描</button>
+              </div>
+            </div>
+            <div class="nav-reason" id="navReason">
+              <div class="reason-title"><i class="ti ti-info-circle" aria-hidden="true"></i><span id="navReasonTitle">等待路径检查</span></div>
+              <div class="reason-body" id="navReasonBody">选择目标点后可查看可达性和修改建议。</div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="sec-head" style="margin-bottom:8px">预设点位</div>
+          <div class="loc-list" id="locList"></div>
+        </div>
+      </div>
+      <div class="log-box" id="navLog"></div>
+    </section>
+
+    <!-- ══ 传感器 ══ -->
+    <section class="panel" id="p-sensor" aria-label="传感器监控">
+      <div class="sensor-grid">
+        <div class="sensor-card">
+          <div class="sensor-head"><div class="s-dot" id="camDot" style="background:var(--text3)"></div>左臂 RGB 相机</div>
+          <div class="cam-preview" id="camPreview"><span>模拟模式 — 未采集</span></div>
+          <div style="margin-top:6px;font-size:11px;color:var(--text2)">1280 × 720 &nbsp;·&nbsp; rgb8 &nbsp;·&nbsp; LEFT_ARM_CAMERA</div>
+        </div>
+        <div class="sensor-card">
+          <div class="sensor-head"><div class="s-dot" id="depthDot" style="background:var(--text3)"></div>左臂深度相机</div>
+          <div class="cam-preview"><canvas id="depthCanvas" style="width:100%;height:100%;display:block"></canvas></div>
+          <div style="margin-top:6px;font-size:11px;color:var(--text2)">16UC1 &nbsp;·&nbsp; <span id="depthScaleText">depth_scale: —</span></div>
+        </div>
+        <div class="sensor-card">
+          <div class="sensor-head"><div class="s-dot" id="imuDot" style="background:var(--text3)"></div>躯干 IMU — TORSO_IMU</div>
+          <div id="imuData" style="font-size:11.5px"></div>
+        </div>
+        <div class="sensor-card">
+          <div class="sensor-head"><div class="s-dot" id="lidarDot" style="background:var(--text3)"></div>底盘激光雷达</div>
+          <canvas class="lidar-canvas" id="lidarCanvas" aria-label="激光雷达点云"></canvas>
+          <div style="margin-top:4px;font-size:11px;color:var(--text2)" id="lidarInfo">PointCloud2 · 等待采集</div>
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn primary" onclick="startSensor()"><i class="ti ti-radio" aria-hidden="true"></i>开始采集</button>
+        <button class="btn" onclick="stopSensor()"><i class="ti ti-square" aria-hidden="true"></i>停止</button>
+        <button class="btn" onclick="saveSnapshot()"><i class="ti ti-camera" aria-hidden="true"></i>快照保存</button>
+      </div>
+      <div class="log-box" id="sensorLog"></div>
+    </section>
+
+    <!-- ══ VLA / 轨迹 ══ -->
+    <section class="panel" id="p-vla" aria-label="VLA 轨迹执行">
+      <div class="stat-row">
+        <div class="stat"><div class="stat-label">推理模式</div><div class="stat-val blue" id="vlaMode">fake_vla</div></div>
+        <div class="stat"><div class="stat-label">轨迹帧数</div><div class="stat-val" id="vlaFramesDisplay">200</div></div>
+        <div class="stat"><div class="stat-label">时间步 dt</div><div class="stat-val">0.008 s</div></div>
+        <div class="stat"><div class="stat-label">执行状态</div><div class="stat-val" id="vlaExecStat">待机</div></div>
+      </div>
+      <div class="vla-config">
+        <div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--text2)">轨迹参数</div>
+        <div class="field-grid" style="grid-template-columns:1fr 1fr 1fr 1fr;margin-bottom:8px">
+          <div class="field-card"><div class="field-label">帧数 T</div><input class="field-input" type="number" id="trajT" value="200" min="10" max="2000" oninput="document.getElementById('vlaFramesDisplay').textContent=this.value"></div>
+          <div class="field-card"><div class="field-label">dt (s)</div><input class="field-input" type="number" id="trajDt" value="0.008" step="0.001"></div>
+          <div class="field-card"><div class="field-label">碰撞检测</div><select class="field-input" id="collCheck" style="font-size:12px"><option value="1">开启</option><option value="0">关闭</option></select></div>
+          <div class="field-card"><div class="field-label">阻塞执行</div><select class="field-input" id="trajBlock" style="font-size:12px"><option value="1">True</option><option value="0">False</option></select></div>
+        </div>
+        <div style="font-size:11px;color:var(--text3)">关节组：leg(5) · head(2) · left_arm(7) · right_arm(7) · 共 21 自由度</div>
+      </div>
+      <div class="vla-progress-wrap">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+          <span style="font-size:12px;font-weight:500">执行进度</span>
+          <span style="font-size:11.5px;font-family:var(--mono);color:var(--text2)" id="vlaProgressText">0 / 0</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="vlaBar"></div></div>
+        <div class="vla-phase" id="vlaPhase">— 待机</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" onclick="runVLA()"><i class="ti ti-brain" aria-hidden="true"></i>执行 VLA</button>
+        <button class="btn" onclick="checkCollision()"><i class="ti ti-shield-check" aria-hidden="true"></i>碰撞检测</button>
+        <button class="btn danger" onclick="stopVLA()"><i class="ti ti-square" aria-hidden="true"></i>停止</button>
+      </div>
+      <div class="log-box" id="vlaLog"></div>
+    </section>
+
+  </main>
+</div>
+
+<div class="resource-monitor collapsed" id="resourceMonitor">
+  <div class="resource-head" onclick="toggleResourceMonitor()">
+    <i class="ti ti-activity"></i><span>机器人资源</span>
+    <span class="resource-summary" id="resourceSummary">等待采样</span>
+  </div>
+  <div class="resource-body">
+    <div class="status" id="resourceLoad">CPU -- · MEM -- · LOAD --</div>
+    <div id="resourceProcesses" style="margin-top:6px"></div>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────
+const API = '/api';
+const CONTROL_TOKEN = new URLSearchParams(location.search).get('token') || localStorage.getItem('galbot_control_token') || '';
+if (new URLSearchParams(location.search).get('token')) localStorage.setItem('galbot_control_token', CONTROL_TOKEN);
+const nativeFetch = window.fetch.bind(window);
+window.fetch = (input, init = {}) => {
+  const headers = new Headers(init.headers || {});
+  if (CONTROL_TOKEN) headers.set('Authorization', 'Bearer ' + CONTROL_TOKEN);
+  return nativeFetch(input, {...init, headers});
+};
+let MODE = 'sim';
+let currentChain = 'left_arm';
+let eeChain = 'left_arm';
+let navGoal = null, navRunning = false, navInterval = null;
+let navExploring = false, navFrontierRunning = false, navExploreTimer = null, navPollingTimer = null, selectedLocKey = null;
+let importedGlobalMap = null;
+let importedRobotModel = null;
+let twinNodes = [], twinDragJoint = -1, twinFollowTimer = null, twinFollowBusy = false;
+let sensorRunning = false, imuTimer = null, lidarTimer = null, depthTimer = null;
+let imuBusy = false, lidarBusy = false, depthBusy = false;
+let vlaRunning = false, vlaTimer = null;
+let robotPos = {x: 28, y: 62};
+let MAP_BOUNDS = {minX:-3, maxX:3, minY:-3, maxY:3};
+
+const JOINT_DEF = {
+  left_arm:  {n:7, min:-3.14, max:3.14,  defs:[1.99,-1.6,-0.6,-1.7,0,-0.8,0], joints:[]},
+  right_arm: {n:7, min:-3.14, max:3.14,  defs:[-2,1.6,0.6,1.7,0,0.8,0], joints:[]},
+  head:      {n:2, min:-1.57, max:1.57,  defs:[0,0], joints:[]},
+  leg:       {n:5, min:-1.0,  max:2.5,   defs:[0.5,1.5,1.0,0,0], joints:[]},
+};
+const JOINT_TASK_POSES = {
+  left_arm: {
+    bottle_ready: [1.65,-1.35,-0.35,-1.45,0.10,-0.95,0.05],
+    bottle_reach: [1.28,-1.08,-0.20,-1.18,0.06,-0.70,0.02],
+    bottle_lift:  [1.78,-1.42,-0.48,-1.32,0.12,-0.58,0.04],
+  },
+  right_arm: {
+    bottle_ready: [-1.65,1.35,0.35,1.45,-0.10,0.95,-0.05],
+    bottle_reach: [-1.28,1.08,0.20,1.18,-0.06,0.70,-0.02],
+    bottle_lift:  [-1.78,1.42,0.48,1.32,-0.12,0.58,-0.04],
+  },
+};
+let LOCATIONS = [];
+const NAV_BASE_BOUNDARY = [
+  {x:8,y:82},{x:12,y:25},{x:34,y:14},{x:72,y:18},{x:90,y:52},{x:82,y:88},{x:45,y:92}
+];
+let navMap = {
+  boundary: NAV_BASE_BOUNDARY.map(p => ({...p})),
+  scanBoundary: NAV_BASE_BOUNDARY.map(p => ({...p})),
+  points: [],
+  path: [],
+  explored: 0,
+  obstacles: [
+    {x:58,y:51,r:6.5,label:'box'},
+    {x:73,y:34,r:5.4,label:'chair'},
+    {x:29,y:68,r:4.8,label:'leg'},
+  ],
+};
+
+// ── PANEL NAV ────────────────────────────────────────────────
+function showPanel(id, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('p-' + id).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (id === 'nav-current') {
+    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+  }
+}
+
+// ── MODE ─────────────────────────────────────────────────────
+function setMode(m) {
+  MODE = m;
+  document.getElementById('modeSimBtn').classList.toggle('active', m === 'sim');
+  document.getElementById('modeLiveBtn').classList.toggle('active', m === 'live');
+  const dot = document.getElementById('connDot');
+  dot.className = 'conn-dot ' + m;
+  document.getElementById('connLabel').textContent = m === 'sim' ? '模拟模式' : '真机已连接';
+  addLog('jointLog', m === 'sim' ? '切换到模拟模式' : '切换到真机模式 — 连接 SDK 中…', 'info');
+  if (m === 'live') {
+    fetch(API + '/status').then(r => r.json()).then(d => {
+      addLog('jointLog', '真机响应: ' + JSON.stringify(d), 'ok');
+    }).catch(() => addLog('jointLog', '⚠ 无法连接后端，请确认 server.py 已启动', 'warn'));
+  }
+}
+
+// ── ESTOP ────────────────────────────────────────────────────
+function eStop() {
+  navRunning = false; navFrontierRunning = false; vlaRunning = false;
+  clearInterval(navInterval); clearInterval(vlaTimer);
+  document.getElementById('sysStatusDot').className = 'conn-dot';
+  document.getElementById('sysStatusDot').style.background = 'var(--red)';
+  document.getElementById('sysStatusText').textContent = '急停已触发';
+  ['jointLog','eeLog','gripLog','navLog','sensorLog','vlaLog'].forEach(id => addLog(id, '[ESTOP] 急停信号已发送', 'err'));
+  if (MODE === 'live') {
+    fetch(API + '/estop', {method:'POST'}).catch(()=>{});
+  }
+  setTimeout(() => {
+    document.getElementById('sysStatusDot').className = 'conn-dot sim';
+    document.getElementById('sysStatusDot').style.background = '';
+    document.getElementById('sysStatusText').textContent = '系统正常';
+  }, 4000);
+}
+
+// ── JOINT ─────────────────────────────────────────────────────
+function buildJointGrid() {
+  const def = JOINT_DEF[currentChain];
+  const joints = Array.isArray(def.joints) ? def.joints : [];
+  document.getElementById('chainInfo').textContent = def.n + ' 关节 · ' + currentChain + (importedRobotModel ? ' · URDF' : '');
+  document.getElementById('taskHint').textContent = currentChain;
+  const g = document.getElementById('jointGrid');
+  g.innerHTML = '';
+  for (let i = 0; i < def.n; i++) {
+    const joint = joints[i] || {};
+    const min = Number.isFinite(+joint.min) ? +joint.min : def.min;
+    const max = Number.isFinite(+joint.max) ? +joint.max : def.max;
+    const v = Math.max(min, Math.min(max, Number.isFinite(+def.defs[i]) ? +def.defs[i] : (Number.isFinite(+joint.default) ? +joint.default : 0)));
+    const label = joint.name || `J${i+1}`;
+    g.innerHTML += `<div class="joint-row" data-joint-idx="${i}">
+      <span class="joint-name" title="${escapeHtml(label)}">${escapeHtml(label)}<span style="font-size:9px;color:var(--text3)"> [${min.toFixed(2)},${max.toFixed(2)}]</span></span>
+      <input id="j${i}" type="range" min="${min}" max="${max}" value="${v}" step="0.01"
+        onfocus="selectNudgeJoint(${i})" oninput="syncJointValue(${i}, this.value)">
+      <span class="joint-val" id="jv${i}">${v.toFixed(3)}</span>
+    </div>`;
+  }
+  refreshNudgeSelect();
+  highlightJointRow();
+}
+function syncJointValue(i, value) {
+  const out = document.getElementById('jv' + i);
+  if (out) out.textContent = (+parseFloat(value).toFixed(3)).toFixed(3);
+  drawUrdfTwin();
+}
+function setJointValues(vals) {
+  const def = JOINT_DEF[currentChain];
+  vals.slice(0, def.n).forEach((v, i) => {
+    const input = document.getElementById('j' + i);
+    if (!input) return;
+    const clamped = Math.max(+input.min, Math.min(+input.max, +v));
+    input.value = clamped.toFixed(3);
+    syncJointValue(i, clamped);
+  });
+}
+function refreshNudgeSelect() {
+  const sel = document.getElementById('nudgeJointSelect');
+  if (!sel) return;
+  const old = sel.value || '0';
+  const def = JOINT_DEF[currentChain];
+  const joints = Array.isArray(def.joints) ? def.joints : [];
+  sel.innerHTML = Array.from({length:def.n}, (_, i) => {
+    const label = joints[i]?.name || `J${i+1}`;
+    return `<option value="${i}">${escapeHtml(label)}</option>`;
+  }).join('');
+  sel.value = Math.min(+old || 0, def.n - 1);
+  highlightJointRow();
+}
+function selectNudgeJoint(i) {
+  const sel = document.getElementById('nudgeJointSelect');
+  if (sel) sel.value = i;
+  highlightJointRow();
+}
+function highlightJointRow() {
+  const sel = document.getElementById('nudgeJointSelect');
+  const idx = sel ? +sel.value : 0;
+  document.querySelectorAll('.joint-row').forEach(row => row.classList.toggle('active', +row.dataset.jointIdx === idx));
+  const label = document.getElementById('nudgeChainText');
+  const jointName = JOINT_DEF[currentChain].joints?.[idx]?.name || `J${idx + 1}`;
+  if (label) label.textContent = `${currentChain} · ${jointName}`;
+}
+function nudgeSelectedJoint(sign) {
+  const sel = document.getElementById('nudgeJointSelect');
+  if (!sel) return;
+  const i = +sel.value;
+  const input = document.getElementById('j' + i);
+  if (!input) return;
+  const step = Math.max(0.01, Math.abs(parseFloat(document.getElementById('nudgeStep').value) || 0.05));
+  const next = Math.max(+input.min, Math.min(+input.max, +input.value + sign * step));
+  input.value = next.toFixed(3);
+  syncJointValue(i, next);
+  highlightJointRow();
+}
+function applyJointPreset(name, silent=false) {
+  const poses = JOINT_TASK_POSES[currentChain];
+  if (!poses || !poses[name]) {
+    addLog('jointLog', `当前关节组没有 ${name} 任务姿态`, 'warn');
+    return false;
+  }
+  setJointValues(poses[name]);
+  if (!silent) addLog('jointLog', `已加载 ${currentChain}.${name}`, 'info');
+  return true;
+}
+function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+async function runBottleTask() {
+  if (!JOINT_TASK_POSES[currentChain]) {
+    addLog('jointLog', '抓瓶流程仅支持 left_arm / right_arm', 'warn');
+    return;
+  }
+  const side = currentChain === 'left_arm' ? 'l' : 'r';
+  addLog('jointLog', `抓取瓶子流程开始: ${currentChain}`, 'info');
+  for (const name of ['bottle_ready', 'bottle_reach']) {
+    applyJointPreset(name, true);
+    await sendJointCmd();
+    await wait(500);
+  }
+  document.getElementById(side + 'gSlider').value = 25;
+  updateGripper(side, 25);
+  sendGripper(side);
+  await wait(700);
+  applyJointPreset('bottle_lift', true);
+  await sendJointCmd();
+  addLog('jointLog', '抓取瓶子流程完成', 'ok');
+}
+function setChain(c, btn) {
+  currentChain = c;
+  document.querySelectorAll('#p-joint .chain-tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  buildJointGrid();
+  document.getElementById('urdfTwinChain').textContent = c;
+  drawUrdfTwin();
+}
+function updateSpeed(v) {
+  const s = (v / 100).toFixed(2);
+  document.getElementById('speedNum').textContent = s + ' rad/s';
+  document.getElementById('speedDisplay').textContent = s + ' rad/s';
+}
+function getJointVals() {
+  return Array.from(document.querySelectorAll('#jointGrid input[type=range]')).map(i => +parseFloat(i.value).toFixed(3));
+}
+function sendJointCmd() {
+  const vals = getJointVals();
+  const sp = (document.getElementById('speedSlider').value / 100).toFixed(2);
+  const cmd = `robot.set_joint_positions(${JSON.stringify(vals)}, ["${currentChain}"], [], True, ${sp}, 20.0)`;
+  addLog('jointLog', cmd, 'cmd');
+  if (MODE === 'live') {
+    return fetch(API + '/joint/set', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({chain: currentChain, positions: vals, max_speed: +sp})})
+      .then(r => r.json()).then(d => {
+        addLog('jointLog', d.ok ? '✅ ' + d.status : '❌ ' + (d.msg || d.status), d.ok ? 'ok' : 'err');
+        return d;
+      })
+      .catch(e => { addLog('jointLog', '❌ 请求失败: ' + e, 'err'); return {ok:false, msg:String(e)}; });
+  }
+  return new Promise(resolve => setTimeout(() => {
+    addLog('jointLog', '✅ ControlStatus.SUCCESS', 'ok');
+    resolve({ok:true, status:'SIMULATED'});
+  }, 500 + Math.random()*300));
+}
+function resetJoints() { buildJointGrid(); addLog('jointLog', '已复位至默认关节角', 'info'); }
+function readJoints() {
+  const cmd = `robot.get_joint_positions(["${currentChain}"], [])`;
+  addLog('jointLog', cmd, 'cmd');
+  if (MODE === 'live') {
+    fetch(API + '/joint/get?chain=' + currentChain).then(r => r.json())
+      .then(d => {
+        if (d.ok && Array.isArray(d.positions)) setJointValues(d.positions);
+        addLog('jointLog', '← ' + JSON.stringify(d.positions), d.ok ? 'ok' : 'err');
+      })
+      .catch(e => addLog('jointLog', '❌ ' + e, 'err'));
+  } else {
+    const fake = JOINT_DEF[currentChain].defs.map(v => +(v + Math.random()*.02 - .01).toFixed(4));
+    setTimeout(() => { setJointValues(fake); addLog('jointLog', '← ' + JSON.stringify(fake), 'ok'); }, 300);
+  }
+}
+function applyUrdfModel(data) {
+  if (!data || !data.chains) throw new Error('URDF 解析结果为空');
+  Object.entries(data.chains).forEach(([chain, joints]) => {
+    if (!JOINT_DEF[chain] || !Array.isArray(joints) || !joints.length) return;
+    const current = JOINT_DEF[chain];
+    current.n = joints.length;
+    current.joints = joints;
+    current.min = Math.min(...joints.map(j => +j.min).filter(Number.isFinite));
+    current.max = Math.max(...joints.map(j => +j.max).filter(Number.isFinite));
+    current.defs = joints.map((j, i) => {
+      const old = Number.isFinite(+current.defs[i]) ? +current.defs[i] : (+j.default || 0);
+      return Math.max(+j.min, Math.min(+j.max, old));
+    });
+  });
+  importedRobotModel = data;
+  buildJointGrid();
+  const status = document.getElementById('urdfStatus');
+  if (status) status.textContent = `已导入 ${data.robot || 'robot'} · ${data.joint_count} joints · ${data.source || 'URDF'}`;
+  addLog('jointLog', `已导入 URDF: ${data.joint_count} 个可控关节`, 'ok');
+}
+async function importDefaultUrdf() {
+  const status = document.getElementById('urdfStatus');
+  if (status) status.textContent = '正在读取默认 URDF...';
+  addLog('jointLog', '读取默认 URDF', 'cmd');
+  try {
+    const r = await fetch(API + '/robot/urdf/import', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({})});
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.msg || 'URDF 解析失败');
+    applyUrdfModel(d);
+  } catch (e) {
+    if (status) status.textContent = 'URDF 导入失败: ' + e.message;
+    addLog('jointLog', '❌ URDF 导入失败: ' + e.message, 'err');
+  }
+}
+async function importUrdfFile(file) {
+  if (!file) return;
+  const status = document.getElementById('urdfStatus');
+  if (status) status.textContent = '正在解析 URDF: ' + file.name;
+  addLog('jointLog', '上传 URDF: ' + file.name, 'cmd');
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const r = await fetch(API + '/robot/urdf/import', {method:'POST', body:fd});
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.msg || 'URDF 解析失败');
+    applyUrdfModel(d);
+  } catch (e) {
+    if (status) status.textContent = 'URDF 导入失败: ' + e.message;
+    addLog('jointLog', '❌ URDF 导入失败: ' + e.message, 'err');
+  } finally {
+    const input = document.getElementById('urdfFileInput');
+    if (input) input.value = '';
+  }
+}
+
+function urdfLinkLengths(){
+  const joints=JOINT_DEF[currentChain].joints||[];
+  return joints.map(joint=>{
+    const xyz=String(joint.origin?.xyz||'').trim().split(/\s+/).map(Number);
+    const length=xyz.length===3&&xyz.every(Number.isFinite)?Math.hypot(...xyz):0;
+    return Math.max(.07,Math.min(.35,length||.12));
+  });
+}
+function drawUrdfTwin(){
+  const canvas=document.getElementById('urdfTwinCanvas');
+  if(!canvas)return;
+  const rect=canvas.parentElement.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  canvas.width=Math.max(1,Math.floor(rect.width*dpr));canvas.height=Math.max(1,Math.floor(rect.height*dpr));
+  canvas.style.width=rect.width+'px';canvas.style.height=rect.height+'px';
+  const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);
+  const width=rect.width,height=rect.height,angles=getJointVals(),lengths=urdfLinkLengths();
+  ctx.fillStyle='#090e14';ctx.fillRect(0,0,width,height);
+  ctx.strokeStyle='rgba(90,110,130,.18)';ctx.lineWidth=1;
+  for(let gridX=0;gridX<width;gridX+=32){ctx.beginPath();ctx.moveTo(gridX,0);ctx.lineTo(gridX,height);ctx.stroke()}
+  for(let gridY=0;gridY<height;gridY+=32){ctx.beginPath();ctx.moveTo(0,gridY);ctx.lineTo(width,gridY);ctx.stroke()}
+  const total=lengths.reduce((sum,value)=>sum+value,0)||1;
+  const scale=Math.min((width-80)/total,(height-50)/(total*.65));
+  let x=42,y=height/2,cumulative=0;
+  twinNodes=[{x,y,index:-1}];
+  lengths.forEach((length,index)=>{
+    cumulative+=angles[index]||0;
+    const nextX=x+Math.cos(cumulative)*length*scale;
+    const nextY=y-Math.sin(cumulative)*length*scale;
+    ctx.strokeStyle=index===twinDragJoint?'#f3b340':'#42d392';ctx.lineWidth=8;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(nextX,nextY);ctx.stroke();
+    x=nextX;y=nextY;twinNodes.push({x,y,index});
+  });
+  twinNodes.forEach((node,index)=>{
+    ctx.fillStyle=index===twinDragJoint+1?'#f3b340':'#d9e5f0';
+    ctx.beginPath();ctx.arc(node.x,node.y,index===twinNodes.length-1?7:5,0,Math.PI*2);ctx.fill();
+    if(index){ctx.fillStyle='#7f93a8';ctx.font='10px ui-monospace';ctx.fillText(`J${index}`,node.x+7,node.y-7)}
+  });
+  document.getElementById('urdfTwinStatus').textContent=importedRobotModel
+    ?`${importedRobotModel.robot} · ${currentChain} · 拖动关节点调整`
+    :'使用内置尺寸预览；请拖入或导入 URDF';
+}
+function twinPointerPosition(event){
+  const rect=document.getElementById('urdfTwinCanvas').getBoundingClientRect();
+  return{x:event.clientX-rect.left,y:event.clientY-rect.top};
+}
+function scheduleTwinFollow(){
+  if(!document.getElementById('urdfLiveFollow').checked||twinFollowBusy)return;
+  clearTimeout(twinFollowTimer);
+  twinFollowTimer=setTimeout(()=>syncTwinToRobot(true),350);
+}
+async function syncTwinToRobot(follow=false){
+  if(!importedRobotModel){addLog('jointLog','请先导入与真机一致的 URDF','warn');return}
+  if(!['left_arm','right_arm'].includes(currentChain)){addLog('jointLog','URDF 真机同步仅支持左右机械臂','warn');return}
+  if(twinFollowBusy)return;
+  twinFollowBusy=true;
+  const speed=Math.min(follow?.05:.12,Math.max(.01,(+document.getElementById('urdfSyncSpeed').value||5)/100));
+  try{
+    const response=await fetch(API+'/joint/urdf_sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      chain:currentChain,positions:getJointVals(),max_speed:speed,follow,
+    })});
+    const data=await response.json();
+    if(!data.ok)throw new Error(data.msg||data.status||'同步失败');
+    document.getElementById('urdfTwinStatus').textContent=`${follow?'实时跟随':'同步完成'} · ${data.status} · ${speed.toFixed(2)} rad/s`;
+  }catch(error){
+    document.getElementById('urdfLiveFollow').checked=false;
+    addLog('jointLog','URDF 同步停止: '+error.message,'err');
+  }finally{twinFollowBusy=false}
+}
+function setupUrdfTwin(){
+  const canvas=document.getElementById('urdfTwinCanvas'),drop=document.getElementById('urdfTwinDrop');
+  canvas.addEventListener('pointerdown',event=>{
+    const point=twinPointerPosition(event);
+    let nearest={distance:Infinity,index:-1};
+    twinNodes.slice(1).forEach(node=>{
+      const distance=Math.hypot(point.x-node.x,point.y-node.y);
+      if(distance<nearest.distance)nearest={distance,index:node.index};
+    });
+    if(nearest.distance>18)return;
+    twinDragJoint=nearest.index;canvas.classList.add('dragging');canvas.setPointerCapture?.(event.pointerId);
+    selectNudgeJoint(twinDragJoint);drawUrdfTwin();
+  });
+  canvas.addEventListener('pointermove',event=>{
+    if(twinDragJoint<0)return;
+    const point=twinPointerPosition(event),previous=twinNodes[twinDragJoint];
+    const prior=getJointVals().slice(0,twinDragJoint).reduce((sum,value)=>sum+value,0);
+    const desired=Math.atan2(previous.y-point.y,point.x-previous.x)-prior;
+    const input=document.getElementById('j'+twinDragJoint);
+    const value=Math.max(+input.min,Math.min(+input.max,desired));
+    input.value=value.toFixed(3);syncJointValue(twinDragJoint,value);scheduleTwinFollow();
+  });
+  const finish=()=>{twinDragJoint=-1;canvas.classList.remove('dragging');drawUrdfTwin()};
+  canvas.addEventListener('pointerup',finish);canvas.addEventListener('pointercancel',finish);
+  for(const type of ['dragenter','dragover'])drop.addEventListener(type,event=>{event.preventDefault();drop.classList.add('dragover')});
+  for(const type of ['dragleave','drop'])drop.addEventListener(type,event=>drop.classList.remove('dragover'));
+  drop.addEventListener('drop',event=>{
+    event.preventDefault();
+    const file=[...(event.dataTransfer?.files||[])].find(item=>/\.(urdf|xml)$/i.test(item.name));
+    if(file)importUrdfFile(file);else addLog('jointLog','请拖入 .urdf 或 .xml 文件','warn');
+  });
+  drawUrdfTwin();
+}
+
+// ── END EFFECTOR ──────────────────────────────────────────────
+function setEEChain(c, btn) {
+  eeChain = c;
+  document.querySelectorAll('#p-ee .chain-tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+function getPose() {
+  return [+document.getElementById('eeX').value, +document.getElementById('eeY').value,
+    +document.getElementById('eeZ').value, +document.getElementById('eeQx').value,
+    +document.getElementById('eeQy').value, +document.getElementById('eeQz').value,
+    +document.getElementById('eeQw').value];
+}
+function solveIK() {
+  const pose = getPose();
+  addLog('eeLog', `motion.inverse_kinematics(${JSON.stringify(pose)}, ["${eeChain}"], "EndEffector", "base_link")`, 'cmd');
+  if (MODE === 'live') {
+    fetch(API + '/motion/ik', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({chain: eeChain, pose})})
+      .then(r => r.json()).then(d => {
+        document.getElementById('ikResult').textContent = JSON.stringify(d.joints, null, 2);
+        addLog('eeLog', '✅ IK 求解成功', 'ok');
+      }).catch(e => addLog('eeLog', '❌ ' + e, 'err'));
+  } else {
+    setTimeout(() => {
+      const j = Array.from({length: 7}, () => +(Math.random()*4 - 2).toFixed(4));
+      document.getElementById('ikResult').textContent = `{"${eeChain}": [${j.join(', ')}]}`;
+      addLog('eeLog', '✅ MotionStatus.SUCCESS', 'ok');
+    }, 500);
+  }
+}
+function setEEPose() {
+  const pose = getPose();
+  addLog('eeLog', `motion.set_end_effector_pose(${JSON.stringify(pose)}, "${eeChain}", "base_link", timeout=5.0)`, 'cmd');
+  if (MODE === 'live') {
+    fetch(API + '/motion/ee', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({chain: eeChain, pose})})
+      .then(r => r.json()).then(d => addLog('eeLog', d.ok ? '✅ MotionStatus.SUCCESS' : '❌ ' + d.msg, d.ok ? 'ok' : 'err'))
+      .catch(e => addLog('eeLog', '❌ ' + e, 'err'));
+  } else {
+    setTimeout(() => addLog('eeLog', '✅ MotionStatus.SUCCESS', 'ok'), 700);
+  }
+}
+function getEEPose() {
+  addLog('eeLog', `motion.get_end_effector_pose_on_chain("${eeChain}", "EndEffector", "base_link")`, 'cmd');
+  if (MODE === 'live') {
+    fetch(API + '/motion/ee_get?chain=' + eeChain).then(r => r.json()).then(d => {
+      ['X','Y','Z','Qx','Qy','Qz','Qw'].forEach((k, i) => document.getElementById('ee'+k).value = d.pose[i].toFixed(4));
+      addLog('eeLog', '← ' + JSON.stringify(d.pose.map(v => +v.toFixed(4))), 'ok');
+    }).catch(e => addLog('eeLog', '❌ ' + e, 'err'));
+  } else {
+    const p = [.1267+Math.random()*.01,.2342+Math.random()*.01,.7356+Math.random()*.01,.022,.013,.034,.999];
+    setTimeout(() => {
+      ['X','Y','Z','Qx','Qy','Qz','Qw'].forEach((k, i) => document.getElementById('ee'+k).value = p[i].toFixed(4));
+      addLog('eeLog', '← ' + JSON.stringify(p.map(v => +v.toFixed(4))), 'ok');
+    }, 300);
+  }
+}
+function solveFKBtn() {
+  addLog('eeLog', `motion.forward_kinematics("left_arm_end_effector_mount_link", "base_link", joint_state)`, 'cmd');
+  setTimeout(() => {
+    const p = [.128,.235,.737,.022,.013,.034,.999].map(v => +v.toFixed(4));
+    addLog('eeLog', '← FK pose: ' + JSON.stringify(p), 'ok');
+  }, 400);
+}
+
+// ── GRIPPER ───────────────────────────────────────────────────
+function updateGripper(side, v) {
+  const w = (v / 1000).toFixed(3);
+  document.getElementById(side + 'gFill').style.width = v + '%';
+  document.getElementById(side + 'gVal').textContent = w + ' m';
+}
+function sendGripper(side) {
+  const w = (document.getElementById(side + 'gSlider').value / 1000).toFixed(3);
+  const sp = document.getElementById(side + 'gSpeed').value;
+  const fo = document.getElementById(side + 'gForce').value;
+  const bl = document.getElementById(side + 'gBlock').value === '1' ? 'True' : 'False';
+  const grp = side === 'l' ? 'LEFT_GRIPPER' : 'RIGHT_GRIPPER';
+  addLog('gripLog', `robot.set_gripper_command(JointGroup.${grp}, ${w}, ${sp}, ${fo}, ${bl})`, 'cmd');
+  if (MODE === 'live') {
+    fetch(API + '/gripper/set', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({side, width:+w, speed:+sp, force:+fo, blocking:bl==='True'})})
+      .then(r => r.json()).then(d => addLog('gripLog', d.ok ? '✅ 夹爪已到位' : '❌ ' + d.msg, d.ok ? 'ok' : 'err'))
+      .catch(e => addLog('gripLog', '❌ ' + e, 'err'));
+  } else {
+    setTimeout(() => addLog('gripLog', '✅ 夹爪已到位', 'ok'), 400);
+  }
+}
+function quickGripper(side, v) {
+  document.getElementById(side + 'gSlider').value = v;
+  updateGripper(side, v);
+  sendGripper(side);
+}
+
+// ── NAV ───────────────────────────────────────────────────────
+function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function fitMapBounds(locations) {
+  const xs = [0], ys = [0];
+  locations.forEach(l => { if (Array.isArray(l.pose) && l.pose.length > 1) { xs.push(+l.pose[0]); ys.push(+l.pose[1]); } });
+  let minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const padX = Math.max(0.5, (maxX - minX) * 0.14);
+  const padY = Math.max(0.5, (maxY - minY) * 0.14);
+  minX -= padX; maxX += padX; minY -= padY; maxY += padY;
+  if (maxX - minX < 2) { const c = (minX + maxX) / 2; minX = c - 1; maxX = c + 1; }
+  if (maxY - minY < 2) { const c = (minY + maxY) / 2; minY = c - 1; maxY = c + 1; }
+  MAP_BOUNDS = {minX, maxX, minY, maxY};
+}
+function poseToMap(x, y) {
+  const px = (x - MAP_BOUNDS.minX) / (MAP_BOUNDS.maxX - MAP_BOUNDS.minX) * 100;
+  const py = (1 - (y - MAP_BOUNDS.minY) / (MAP_BOUNDS.maxY - MAP_BOUNDS.minY)) * 100;
+  return {px: clamp(+px.toFixed(1), 0, 100), py: clamp(+py.toFixed(1), 0, 100)};
+}
+function mapToPose(px, py) {
+  const x = MAP_BOUNDS.minX + (px / 100) * (MAP_BOUNDS.maxX - MAP_BOUNDS.minX);
+  const y = MAP_BOUNDS.minY + (1 - py / 100) * (MAP_BOUNDS.maxY - MAP_BOUNDS.minY);
+  return {x:+x.toFixed(3), y:+y.toFixed(3)};
+}
+function yawFromQuat(pose) {
+  if (!Array.isArray(pose) || pose.length < 7) return 0;
+  const z = +pose[5], w = +pose[6];
+  return +((2 * Math.atan2(z, w))).toFixed(3);
+}
+function navGoalPose() {
+  if (!navGoal) return [0,0,0,0,0,0,1];
+  const yaw = +navGoal.yaw || 0;
+  return [+navGoal.x, +navGoal.y, 0, 0, 0, +Math.sin(yaw/2).toFixed(6), +Math.cos(yaw/2).toFixed(6)];
+}
+function normaliseLocation(l) {
+  if (Array.isArray(l.pose) && l.pose.length > 1) {
+    const p = poseToMap(+l.pose[0], +l.pose[1]);
+    return {...l, px:p.px, py:p.py, yaw:yawFromQuat(l.pose)};
+  }
+  return {...l, px:l.px || 50, py:l.py || 50, yaw:0};
+}
+function buildLocList() {
+  const list = document.getElementById('locList');
+  list.innerHTML = LOCATIONS.map(l =>
+    `<div class="loc-item" id="loc-${escapeHtml(l.key)}" onclick="navToLoc('${escapeHtml(l.key)}')">
+      <div style="font-size:12.5px">${escapeHtml(l.name)}</div>
+      <div class="loc-id">${escapeHtml(l.key)} · ${Array.isArray(l.pose) ? `${(+l.pose[0]).toFixed(2)}, ${(+l.pose[1]).toFixed(2)}` : '临时点'}</div>
+    </div>`
+  ).join('');
+}
+async function loadLocations() {
+  try {
+    const r = await fetch(API + '/nav/locations');
+    const d = await r.json();
+    if (d.ok && Array.isArray(d.locations) && d.locations.length) {
+      fitMapBounds(d.locations);
+      LOCATIONS = d.locations.map(normaliseLocation);
+      buildLocList();
+      addLog('navLog', '已同步预设点位: ' + d.source, 'ok');
+      drawNavMap();
+      return;
+    }
+  } catch (e) {
+    addLog('navLog', '⚠ 预设点位同步失败: ' + e, 'warn');
+  }
+  LOCATIONS = [];
+  buildLocList();
+}
+function setGoalFromMap(px, py, label='地图点', yaw=0, logIt=true) {
+  const pose = mapToPose(px, py);
+  navGoal = {px:+px.toFixed(1), py:+py.toFixed(1), x:pose.x, y:pose.y, yaw:+yaw || 0, label};
+  const gd = document.getElementById('goalDot');
+  gd.style.display = 'block'; gd.style.left = navGoal.px + '%'; gd.style.top = navGoal.py + '%';
+  document.getElementById('navGoalX').value = navGoal.x.toFixed(3);
+  document.getElementById('navGoalY').value = navGoal.y.toFixed(3);
+  document.getElementById('navGoalYaw').value = navGoal.yaw.toFixed(3);
+  document.getElementById('navGoalDisplay').textContent = label === '地图点' ? `[${navGoal.x.toFixed(2)}, ${navGoal.y.toFixed(2)}]` : label;
+  if (logIt) addLog('navLog', `目标点: [${navGoal.x}, ${navGoal.y}, 0, yaw=${navGoal.yaw}]`, 'info');
+  checkNavPath(true);
+  drawNavMap();
+}
+function setNavGoal(e) {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const px = +((e.clientX - rect.left) / rect.width * 100).toFixed(1);
+  const py = +((e.clientY - rect.top) / rect.height * 100).toFixed(1);
+  selectedLocKey = null;
+  document.querySelectorAll('.loc-item').forEach(l => l.classList.remove('active'));
+  setGoalFromMap(px, py, '地图点', +(document.getElementById('navGoalYaw').value || 0));
+}
+function navToLoc(key) {
+  const l = LOCATIONS.find(x => x.key === key);
+  if (!l) return;
+  selectedLocKey = key;
+  document.querySelectorAll('.loc-item').forEach(item => item.classList.remove('active'));
+  const row = document.getElementById('loc-' + key);
+  if (row) row.classList.add('active');
+  setGoalFromMap(l.px, l.py, l.name, l.yaw || 0);
+  addLog('navLog', `目标: ${l.name} (${l.key})`, 'info');
+}
+function applyGoalEdit(logIt=true) {
+  const x = parseFloat(document.getElementById('navGoalX').value);
+  const y = parseFloat(document.getElementById('navGoalY').value);
+  const yaw = parseFloat(document.getElementById('navGoalYaw').value) || 0;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  const p = poseToMap(x, y);
+  setGoalFromMap(p.px, p.py, selectedLocKey ? '已编辑点位' : '手动位姿', yaw, logIt);
+}
+function saveTempLocation() {
+  if (!navGoal) { addLog('navLog', '⚠ 先选择一个目标点', 'warn'); return; }
+  const key = 'temp_' + Date.now().toString().slice(-5);
+  LOCATIONS.push({key, name:'临时点 ' + (LOCATIONS.length + 1), pose:navGoalPose(), px:navGoal.px, py:navGoal.py, yaw:navGoal.yaw});
+  buildLocList();
+  addLog('navLog', `已加入临时点位: ${key}`, 'ok');
+}
+function pointInPolygon(p, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    const intersect = ((yi > p.y) !== (yj > p.y)) && (p.x < (xj - xi) * (p.y - yi) / ((yj - yi) || 0.0001) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+function distPointSeg(p, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const t = clamp(((p.x - a.x) * dx + (p.y - a.y) * dy) / ((dx*dx + dy*dy) || 1), 0, 1);
+  const x = a.x + t * dx, y = a.y + t * dy;
+  return Math.hypot(p.x - x, p.y - y);
+}
+function diagnoseGoal(goal) {
+  const causes = [], suggestions = [];
+  if (!goal) return {reachable:false, causes:['尚未选择目标点。'], suggestions:['点击地图或预设点位后再检查。']};
+  const target = {x:goal.px, y:goal.py};
+  if (!pointInPolygon(target, navMap.boundary)) {
+    causes.push('目标点位于雷达扫描边界外或未知区域。');
+    suggestions.push('把目标 X/Y 调回绿色边界内部，或先扫描建图扩大已知区域。');
+  }
+  navMap.obstacles.forEach(o => {
+    const d = Math.hypot(target.x - o.x, target.y - o.y);
+    if (d < o.r + 3) causes.push(`目标点距离障碍 ${o.label} 过近。`);
+    if (distPointSeg({x:o.x,y:o.y}, robotPos, target) < o.r + 2) causes.push(`当前直线路径穿过障碍 ${o.label}。`);
+  });
+  if (navMap.points.length < 20) suggestions.push('雷达点云较少，可点击“扫描建图”刷新边界。');
+  if (causes.length && !suggestions.length) suggestions.push('修改目标位姿后重新检查路径。');
+  return {reachable:causes.length === 0, causes, suggestions};
+}
+function showNavReason(result, title=null) {
+  const box = document.getElementById('navReason');
+  const h = document.getElementById('navReasonTitle');
+  const body = document.getElementById('navReasonBody');
+  box.className = 'nav-reason ' + (result.reachable ? 'ok' : 'err');
+  h.textContent = title || (result.reachable ? '路径可达' : '路径不可达');
+  if (result.reachable) {
+    body.textContent = '目标点位于已知边界内，当前局部路径未穿过障碍。';
+    return;
+  }
+  const causes = result.causes || [];
+  const suggestions = result.suggestions || [];
+  body.innerHTML = `<div>原因</div><ul>${causes.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>` +
+    (suggestions.length ? `<div style="margin-top:6px">修改建议</div><ul>${suggestions.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>` : '');
+}
+async function checkNavPath(silent=false) {
+  const local = diagnoseGoal(navGoal);
+  if (!silent || !local.reachable) showNavReason(local);
+  if (!local.reachable || MODE !== 'live') return local;
+  try {
+    const r = await fetch(API + '/nav/check', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pose:navGoalPose()})});
+    const d = await r.json();
+    const result = d.reachable ? {reachable:true, causes:[], suggestions:[]} : {
+      reachable:false,
+      causes:(d.reason && d.reason.causes) || [d.msg || '后端返回路径不可达。'],
+      suggestions:(d.reason && d.reason.suggestions) || ['调整目标点或重定位后重试。']
+    };
+    showNavReason(result, d.reachable ? '后端检查可达' : '后端检查不可达');
+    return result;
+  } catch (e) {
+    const result = {reachable:false, causes:['后端路径检查请求失败: ' + e], suggestions:['确认 server.py 已启动并处于真机模式。']};
+    showNavReason(result);
+    return result;
+  }
+}
+async function startNav(options={}) {
+  if (!navGoal) { addLog('navLog', '⚠ 请先在地图上点击设置目标点', 'warn'); return; }
+  const check = await checkNavPath(false);
+  if (!check.reachable) { document.getElementById('navRunStatus').textContent = '不可达'; document.getElementById('navRunStatus').className = 'stat-val err'; return; }
+  navRunning = true;
+  navMap.path = [{...robotPos}, {x:navGoal.px, y:navGoal.py}];
+  drawNavMap();
+  document.getElementById('navRunStatus').textContent = '导航中'; document.getElementById('navRunStatus').className = 'stat-val warn';
+  document.getElementById('navDot').style.background = 'var(--orange)';
+  document.getElementById('navStatusText').textContent = '导航中…';
+  if (MODE === 'live') {
+    fetch(API + '/nav/goto', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pose: navGoalPose()})})
+      .then(r => r.json()).then(d => {
+        if (d.ok) addLog('navLog', '✅ 导航指令已发送', 'ok');
+        else {
+          const result = {reachable:false, causes:(d.reason && d.reason.causes) || [d.msg], suggestions:(d.reason && d.reason.suggestions) || []};
+          showNavReason(result, d.msg || '路径不可达');
+          addLog('navLog', '❌ ' + (d.msg || '导航失败'), 'err');
+        }
+      }).catch(e => addLog('navLog', '❌ ' + e, 'err'));
+    return;
+  }
+  const sx = robotPos.x, sy = robotPos.y, ex = navGoal.px, ey = navGoal.py;
+  let t = 0;
+  clearInterval(navInterval);
+  navInterval = setInterval(() => {
+    if (!navRunning) { clearInterval(navInterval); return; }
+    t = Math.min(t + 0.04, 1);
+    robotPos = {x:+(sx + (ex - sx) * t).toFixed(1), y:+(sy + (ey - sy) * t).toFixed(1)};
+    const rp = mapToPose(robotPos.x, robotPos.y);
+    document.getElementById('robotDot').style.left = robotPos.x + '%';
+    document.getElementById('robotDot').style.top = robotPos.y + '%';
+    document.getElementById('robotPoseText').textContent = `[${rp.x.toFixed(2)}, ${rp.y.toFixed(2)}, 0]`;
+    addScanAtRobot(8);
+    drawNavMap();
+    if (t >= 1) {
+      clearInterval(navInterval); navRunning = false;
+      document.getElementById('navRunStatus').textContent = '已到达'; document.getElementById('navRunStatus').className = 'stat-val ok';
+      document.getElementById('navDot').style.background = 'var(--green)';
+      document.getElementById('navStatusText').textContent = '已到达';
+      addLog('navLog', '✅ nav.check_goal_arrival() → True', 'ok');
+      if (typeof options.onArrive === 'function') options.onArrive();
+    }
+  }, 80);
+}
+function nearestObstacleClearance(p) {
+  if (!navMap.obstacles.length) return 99;
+  return Math.min(...navMap.obstacles.map(o => Math.hypot(p.x - o.x, p.y - o.y) - o.r));
+}
+function pointDensityNear(p, radius=10) {
+  let count = 0;
+  const r2 = radius * radius;
+  navMap.points.forEach(q => {
+    const dx = q.x - p.x, dy = q.y - p.y;
+    if (dx * dx + dy * dy <= r2) count++;
+  });
+  return count;
+}
+function pickFrontierGoal() {
+  const boundary = (navMap.scanBoundary && navMap.scanBoundary.length > 3) ? navMap.scanBoundary : navMap.boundary;
+  if (!boundary || boundary.length < 3) return null;
+  const center = boundary.reduce((acc, p) => ({x:acc.x + p.x, y:acc.y + p.y}), {x:0, y:0});
+  center.x /= boundary.length; center.y /= boundary.length;
+  const candidates = boundary.map((p, i) => {
+    const prev = boundary[(i - 1 + boundary.length) % boundary.length];
+    const next = boundary[(i + 1) % boundary.length];
+    const edge = Math.hypot(next.x - prev.x, next.y - prev.y);
+    const inward = {x:center.x - p.x, y:center.y - p.y};
+    const len = Math.hypot(inward.x, inward.y) || 1;
+    const goal = {x:clamp(p.x + inward.x / len * 7, 3, 97), y:clamp(p.y + inward.y / len * 7, 3, 97)};
+    const travel = Math.hypot(goal.x - robotPos.x, goal.y - robotPos.y);
+    const density = pointDensityNear(goal, 11);
+    const clearance = nearestObstacleClearance(goal);
+    const reachable = pointInPolygon(goal, navMap.boundary) && clearance > 3 && travel > 12;
+    const score = edge * 1.8 + travel * 0.35 - density * 0.9 + clearance * 0.4;
+    return {...goal, score, reachable};
+  }).filter(c => c.reachable).sort((a, b) => b.score - a.score);
+  return candidates[0] || null;
+}
+async function startFrontierExplore() {
+  if (navFrontierRunning) return;
+  if (MODE === 'live' && !navExploring) startExplore();
+  if (MODE !== 'live' && navMap.points.length < 32) addScanAtRobot(120);
+  navFrontierRunning = true;
+  document.getElementById('navRunStatus').textContent = '探索中';
+  document.getElementById('navRunStatus').className = 'stat-val warn';
+  addLog('navLog', '自主探索边界: 从点云边界选择 frontier 目标', 'cmd');
+  const runOne = async () => {
+    if (!navFrontierRunning) return;
+    const frontier = pickFrontierGoal();
+    if (!frontier) {
+      navFrontierRunning = false;
+      document.getElementById('navStatusText').textContent = '没有可用 frontier';
+      addLog('navLog', '未找到可达 frontier，可先扫描建图或导入全局 PCD', 'warn');
+      return;
+    }
+    const pose = mapToPose(frontier.x, frontier.y);
+    const yaw = Math.atan2(frontier.y - robotPos.y, frontier.x - robotPos.x);
+    setGoalFromMap(frontier.x, frontier.y, 'Frontier', yaw, true);
+    addLog('navLog', `frontier → [${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}], score=${frontier.score.toFixed(1)}`, 'info');
+    if (MODE === 'live') {
+      navFrontierRunning = false;
+      await startNav();
+      addLog('navLog', '真机模式已发送一个 frontier 目标；到达后可再次点击自主探索。', 'info');
+      return;
+    }
+    await startNav({onArrive: () => {
+      addScanAtRobot(120);
+      navMap.explored = Math.min(100, navMap.explored + 8);
+      setTimeout(runOne, 450);
+    }});
+  };
+  runOne();
+}
+function relocalize() {
+  document.getElementById('navLocStatus').textContent = '重定位中…'; document.getElementById('navLocStatus').className = 'stat-val warn';
+  document.getElementById('navDot').style.background = 'var(--orange)';
+  addLog('navLog', 'nav.relocalize([0,0,0,0,0,0,1])', 'cmd');
+  if (MODE === 'live') {
+    fetch(API + '/nav/relocalize', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pose: navGoal ? navGoalPose() : [0,0,0,0,0,0,1]})})
+      .then(r=>r.json()).then(d => {
+        document.getElementById('navLocStatus').textContent = d.localized ? '已定位' : '定位失败';
+        document.getElementById('navLocStatus').className = 'stat-val ' + (d.localized ? 'ok' : 'err');
+        document.getElementById('navDot').style.background = d.localized ? 'var(--green)' : 'var(--red)';
+        addLog('navLog', d.localized ? '✅ nav.is_localized() → True' : '❌ 重定位失败', d.localized ? 'ok' : 'err');
+      }).catch(e => addLog('navLog', '❌ ' + e, 'err'));
+    return;
+  }
+  let n = 0;
+  const iv = setInterval(() => {
+    n++;
+    addLog('navLog', `重定位重试 (${n}/10)…`, 'info');
+    if (n >= 3 || Math.random() > 0.4) {
+      clearInterval(iv);
+      document.getElementById('navLocStatus').textContent = '已定位'; document.getElementById('navLocStatus').className = 'stat-val ok';
+      document.getElementById('navDot').style.background = 'var(--green)';
+      document.getElementById('navStatusText').textContent = '已定位';
+      addLog('navLog', '✅ nav.is_localized() → True', 'ok');
+    }
+  }, 600);
+}
+function startExplore() {
+  if (navExploring) return;
+  navExploring = true;
+  document.getElementById('navRunStatus').textContent = '扫描中'; document.getElementById('navRunStatus').className = 'stat-val warn';
+  document.getElementById('navStatusText').textContent = '雷达扫描建图中';
+  addLog('navLog', '启动雷达扫描建图', 'cmd');
+  if (MODE === 'live') {
+    fetch(API + '/nav/explore', {method:'POST'}).then(r=>r.json()).then(d => addLog('navLog', d.ok ? '✅ 探索接口已启动' : '⚠ ' + d.msg, d.ok ? 'ok' : 'warn')).catch(()=>{});
+    clearInterval(navPollingTimer);
+    navPollingTimer = setInterval(loadNavMapFromBackend, 800);
+    loadNavMapFromBackend();
+    return;
+  }
+  const route = [{x:28,y:62},{x:37,y:39},{x:55,y:31},{x:74,y:48},{x:67,y:72},{x:42,y:78},{x:28,y:62}];
+  let i = 0, t = 0;
+  clearInterval(navExploreTimer);
+  navExploreTimer = setInterval(() => {
+    const a = route[i], b = route[(i + 1) % route.length];
+    t += 0.055;
+    if (t >= 1) { t = 0; i = (i + 1) % (route.length - 1); }
+    robotPos = {x:+(a.x + (b.x - a.x) * t).toFixed(1), y:+(a.y + (b.y - a.y) * t).toFixed(1)};
+    addScanAtRobot(18);
+    navMap.explored = Math.min(96, navMap.explored + 1.4);
+    drawNavMap();
+    if (navMap.explored >= 96) stopExplore();
+  }, 260);
+}
+function stopExplore() {
+  navExploring = false;
+  navFrontierRunning = false;
+  clearInterval(navExploreTimer); clearInterval(navPollingTimer);
+  document.getElementById('navRunStatus').textContent = '待机'; document.getElementById('navRunStatus').className = 'stat-val';
+  document.getElementById('navStatusText').textContent = '扫描已停止';
+  if (MODE === 'live') fetch(API + '/nav/explore/stop', {method:'POST'}).catch(()=>{});
+  addLog('navLog', '雷达扫描建图已停止', 'warn');
+}
+function stopNav() {
+  navRunning = false; navFrontierRunning = false; clearInterval(navInterval);
+  document.getElementById('navRunStatus').textContent = '已停止'; document.getElementById('navRunStatus').className = 'stat-val';
+  document.getElementById('navDot').style.background = 'var(--text3)';
+  document.getElementById('navStatusText').textContent = '已停止';
+  navMap.path = [];
+  drawNavMap();
+  addLog('navLog', 'nav.stop_navigation()', 'warn');
+  if (MODE === 'live') fetch(API + '/nav/stop', {method:'POST'}).catch(()=>{});
+}
+async function loadNavMapFromBackend() {
+  try {
+    const r = await fetch(API + '/nav/map?t=' + Date.now());
+    const d = await r.json();
+    if (!d.ok) { addLog('navLog', d.msg || '雷达地图读取失败', 'warn'); return; }
+    if (Array.isArray(d.pose) && d.pose.length > 1) robotPos = poseToMap(+d.pose[0], +d.pose[1]);
+    if (Array.isArray(d.points) && d.points.length) {
+      navMap.points = d.points.map(p => ({x:clamp(robotPos.x + (+p[0] / Math.max(0.1, MAP_BOUNDS.maxX - MAP_BOUNDS.minX)) * 100, 0, 100), y:clamp(robotPos.y - (+p[1] / Math.max(0.1, MAP_BOUNDS.maxY - MAP_BOUNDS.minY)) * 100, 0, 100)}));
+      estimateScanBoundary();
+      navMap.explored = Math.min(100, Math.max(navMap.explored, Math.round(navMap.points.length / 8)));
+    }
+    drawNavMap();
+  } catch (e) {
+    addLog('navLog', '雷达地图请求失败: ' + e, 'warn');
+  }
+}
+function applyImportedMap(data) {
+  if (!data || !Array.isArray(data.points) || !data.points.length) {
+    addLog('navLog', 'PCD 没有可用点云', 'warn');
+    return;
+  }
+  const b = data.bounds || {};
+  const xs = data.points.map(p => +p[0]).filter(Number.isFinite);
+  const ys = data.points.map(p => +p[1]).filter(Number.isFinite);
+  const minX = Number.isFinite(+b.min_x) ? +b.min_x : Math.min(...xs);
+  const maxX = Number.isFinite(+b.max_x) ? +b.max_x : Math.max(...xs);
+  const minY = Number.isFinite(+b.min_y) ? +b.min_y : Math.min(...ys);
+  const maxY = Number.isFinite(+b.max_y) ? +b.max_y : Math.max(...ys);
+  const padX = Math.max(0.5, (maxX - minX) * 0.04);
+  const padY = Math.max(0.5, (maxY - minY) * 0.04);
+  MAP_BOUNDS = {minX:minX - padX, maxX:maxX + padX, minY:minY - padY, maxY:maxY + padY};
+  importedGlobalMap = data;
+  navMap.points = data.points.map(p => {
+    const m = poseToMap(+p[0], +p[1]);
+    return {x:m.px, y:m.py, z:+p[2] || 0};
+  });
+  navMap.explored = 100;
+  robotPos = poseToMap(0, 0);
+  estimateGlobalBoundary();
+  LOCATIONS = LOCATIONS.map(normaliseLocation);
+  buildLocList();
+  drawNavMap();
+  const status = document.getElementById('mapImportStatus');
+  if (status) status.textContent = `已导入 ${data.source || 'PCD'} · ${data.sampled_points}/${data.total_points} pts · X[${minX.toFixed(2)},${maxX.toFixed(2)}] Y[${minY.toFixed(2)},${maxY.toFixed(2)}]`;
+  addLog('navLog', `已导入全局 PCD: ${data.sampled_points}/${data.total_points} 点`, 'ok');
+}
+async function importPcdMap(file) {
+  if (!file) return;
+  const status = document.getElementById('mapImportStatus');
+  if (status) status.textContent = '正在解析 PCD: ' + file.name;
+  addLog('navLog', '导入 PCD: ' + file.name, 'cmd');
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const r = await fetch(API + '/nav/map/import', {method:'POST', body:fd});
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.msg || 'PCD 解析失败');
+    applyImportedMap(d);
+  } catch (e) {
+    if (status) status.textContent = 'PCD 导入失败: ' + e.message;
+    addLog('navLog', '❌ PCD 导入失败: ' + e.message, 'err');
+  } finally {
+    const input = document.getElementById('pcdFileInput');
+    if (input) input.value = '';
+  }
+}
+async function importDefaultPcdMap() {
+  const status = document.getElementById('mapImportStatus');
+  if (status) status.textContent = '正在读取默认全局 PCD...';
+  addLog('navLog', '读取默认全局 PCD', 'cmd');
+  try {
+    const r = await fetch(API + '/nav/map/import', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({})});
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.msg || '默认 PCD 解析失败');
+    applyImportedMap(d);
+  } catch (e) {
+    if (status) status.textContent = '默认 PCD 导入失败: ' + e.message;
+    addLog('navLog', '❌ 默认 PCD 导入失败: ' + e.message, 'err');
+  }
+}
+function estimateGlobalBoundary() {
+  if (navMap.points.length < 24) { estimateScanBoundary(); navMap.boundary = navMap.scanBoundary.map(p => ({...p})); return; }
+  const center = navMap.points.reduce((acc, p) => ({x:acc.x + p.x, y:acc.y + p.y}), {x:0, y:0});
+  center.x /= navMap.points.length; center.y /= navMap.points.length;
+  const bins = Array.from({length:72}, () => null);
+  navMap.points.forEach(p => {
+    const a = (Math.atan2(p.y - center.y, p.x - center.x) + Math.PI * 2) % (Math.PI * 2);
+    const idx = Math.floor(a / (Math.PI * 2) * bins.length);
+    const d = Math.hypot(p.x - center.x, p.y - center.y);
+    if (!bins[idx] || d > bins[idx].d) bins[idx] = {...p, d, a};
+  });
+  const boundary = bins.filter(Boolean).sort((a,b) => a.a - b.a).map(({x,y}) => ({x,y}));
+  if (boundary.length > 3) {
+    navMap.boundary = boundary;
+    navMap.scanBoundary = boundary.map(p => ({...p}));
+  }
+}
+
+function clearNavMap() {
+  importedGlobalMap = null;
+  navMap.points = [];
+  navMap.path = [];
+  navMap.explored = 0;
+  navMap.boundary = NAV_BASE_BOUNDARY.map(p => ({...p}));
+  navMap.scanBoundary = navMap.boundary.map(p => ({...p}));
+  const status = document.getElementById('mapImportStatus');
+  if (status) status.textContent = '全局地图未导入';
+  drawNavMap();
+  addLog('navLog', '已清空本地扫描点云', 'info');
+}
+// ── SENSOR ────────────────────────────────────────────────────
+let camTimer = null;
+function startSensor() {
+  sensorRunning = true;
+  ['camDot','depthDot','imuDot','lidarDot'].forEach(id => document.getElementById(id).style.background = 'var(--green)');
+  document.getElementById('camPreview').innerHTML = '<img id="camFrame" alt="左臂 RGB" style="width:100%;height:100%;object-fit:cover;border-radius:8px" src="' + API + '/sensor/rgb?t=' + Date.now() + '">';
+  addLog('sensorLog', 'robot.get_rgb_data(SensorType.LEFT_ARM_CAMERA)', 'cmd');
+  addLog('sensorLog', 'robot.get_depth_data(SensorType.LEFT_ARM_DEPTH_CAMERA)', 'cmd');
+  addLog('sensorLog', 'robot.get_lidar_data(SensorType.BASE_LIDAR)', 'cmd');
+  addLog('sensorLog', 'robot.get_imu_data(SensorType.TORSO_IMU)', 'cmd');
+  imuTimer = setInterval(updateIMU, 800);
+  lidarTimer = setInterval(drawLidar, 500);
+  depthTimer = setInterval(updateDepth, 700);
+  if (camTimer) clearInterval(camTimer);
+  camTimer = setInterval(() => {
+    const img = document.getElementById('camFrame');
+    if (img && sensorRunning) img.src = API + '/sensor/rgb?t=' + Date.now();
+  }, 300);
+  if (MODE === 'live') {
+    fetch(API + '/sensor/start', {method:'POST'}).then(r=>r.json())
+      .then(d => addLog('sensorLog', d.ok ? '✅ 传感器采集已启动' : '❌ ' + d.msg, d.ok ? 'ok' : 'err'))
+      .catch(e => addLog('sensorLog', '❌ ' + e, 'err'));
+  }
+  updateIMU(); drawLidar(); updateDepth();
+}
+function stopSensor() {
+  sensorRunning = false;
+  clearInterval(imuTimer); clearInterval(lidarTimer); clearInterval(depthTimer); clearInterval(camTimer);
+  ['camDot','depthDot','imuDot','lidarDot'].forEach(id => document.getElementById(id).style.background = 'var(--text3)');
+  addLog('sensorLog', '传感器采集已停止', 'warn');
+}
+async function updateIMU() {
+  if(!sensorRunning||imuBusy)return;
+  imuBusy=true;
+  try{
+    const data=await (await fetch(API+'/sensor/imu?t='+Date.now(),{cache:'no-store'})).json();
+    if(!data.ok)throw new Error(data.msg||'IMU读取失败');
+    const imu=data.data||{},accel=imu.accel||[0,0,0],gyro=imu.gyro||[0,0,0],magnet=imu.magnet||[0,0,0];
+    const fields=[
+      ['accel_x',`${(+accel[0]).toFixed(4)} m/s²`],['accel_y',`${(+accel[1]).toFixed(4)} m/s²`],['accel_z',`${(+accel[2]).toFixed(4)} m/s²`],
+      ['gyro_x',`${(+gyro[0]).toFixed(5)} rad/s`],['gyro_y',`${(+gyro[1]).toFixed(5)} rad/s`],['gyro_z',`${(+gyro[2]).toFixed(5)} rad/s`],
+      ['magnet',magnet.map(value=>(+value).toFixed(3)).join(', ')],
+    ];
+    document.getElementById('imuData').innerHTML=fields.map(([key,value])=>`<div class="imu-row"><span class="imu-k">${key}</span><span class="imu-v">${value}</span></div>`).join('');
+  }catch(error){
+    document.getElementById('imuDot').style.background='var(--red)';
+  }finally{imuBusy=false}
+}
+async function drawLidar() {
+  if(!sensorRunning||lidarBusy)return;
+  lidarBusy=true;
+  try{
+    const data=await (await fetch(API+'/sensor/lidar?t='+Date.now(),{cache:'no-store'})).json();
+    if(!data.ok)throw new Error(data.msg||'雷达读取失败');
+    const points=Array.isArray(data.points)?data.points:[];
+    const canvas=document.getElementById('lidarCanvas'),ctx=canvas.getContext('2d');
+    canvas.width=canvas.offsetWidth||240;canvas.height=96;
+    const cx=canvas.width/2,cy=canvas.height/2;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.strokeStyle='rgba(63,185,80,.25)';ctx.lineWidth=1;
+    for(const ratio of [.33,.66,1]){ctx.beginPath();ctx.arc(cx,cy,(Math.min(cx,cy)-7)*ratio,0,Math.PI*2);ctx.stroke()}
+    ctx.fillStyle='var(--green)';ctx.beginPath();ctx.arc(cx,cy,3,0,Math.PI*2);ctx.fill();
+    const ranges=points.map(point=>Math.hypot(+point[0],+point[1])).filter(Number.isFinite);
+    const maxRange=Math.max(1,...ranges),scale=(Math.min(cx,cy)-7)/maxRange;
+    ctx.fillStyle='rgba(63,185,80,.82)';
+    points.forEach(point=>ctx.fillRect(cx+(+point[0])*scale-1,cy-(+point[1])*scale-1,2,2));
+    document.getElementById('lidarInfo').textContent=`${data.source||'BASE_LIDAR'} · ${points.length} pts · ${maxRange.toFixed(1)} m`;
+  }catch(error){
+    document.getElementById('lidarDot').style.background='var(--red)';
+    document.getElementById('lidarInfo').textContent=error.message;
+  }finally{lidarBusy=false}
+}
+async function updateDepth(){
+  if(!sensorRunning||depthBusy)return;
+  depthBusy=true;
+  try{
+    const data=await (await fetch(API+'/sensor/depth?t='+Date.now(),{cache:'no-store'})).json();
+    if(!data.ok||!data.depth)throw new Error(data.msg||'深度数据不可用');
+    const depth=data.depth,canvas=document.getElementById('depthCanvas'),ctx=canvas.getContext('2d');
+    canvas.width=depth.width;canvas.height=depth.height;
+    const image=ctx.createImageData(depth.width,depth.height);
+    const min=depth.min_m||0,max=Math.max(min+.01,depth.max_m||5);
+    depth.values.forEach((row,y)=>row.forEach((value,x)=>{
+      const index=(y*depth.width+x)*4,t=value?clamp((value-min)/(max-min),0,1):1;
+      image.data[index]=value?Math.round(35+220*(1-t)):8;
+      image.data[index+1]=value?Math.round(90+130*t):12;
+      image.data[index+2]=value?Math.round(235-150*t):17;
+      image.data[index+3]=255;
+    }));
+    ctx.putImageData(image,0,0);
+    document.getElementById('depthScaleText').textContent=`${depth.source_width}×${depth.source_height} · ${min.toFixed(2)}-${max.toFixed(2)}m`;
+  }catch(error){
+    document.getElementById('depthDot').style.background='var(--red)';
+  }finally{depthBusy=false}
+}
+function saveSnapshot() {
+  const link=document.createElement('a');
+  link.href=API+'/sensor/rgb?t='+Date.now();
+  link.download='galbot_rgb_snapshot.jpg';
+  link.click();
+  addLog('sensorLog', '已请求保存当前 RGB 快照', 'ok');
+}
+
+function toggleResourceMonitor(){
+  document.getElementById('resourceMonitor').classList.toggle('collapsed');
+}
+async function stopManagedProcess(pid,name){
+  if(!confirm(`确认停止 ${name} (PID ${pid})？`))return;
+  try{
+    const response=await fetch(`${API}/system/processes/${pid}/stop`,{method:'POST'});
+    const data=await response.json();
+    if(!data.ok)throw new Error(data.msg||'停止失败');
+    addLog('sensorLog',`已向 ${name} (PID ${pid}) 发送 SIGTERM`,'warn');
+    setTimeout(updateResourceMonitor,500);
+  }catch(error){addLog('sensorLog','停止进程失败: '+error.message,'err')}
+}
+async function updateResourceMonitor(){
+  try{
+    const data=await (await fetch(API+'/system/resources?t='+Date.now(),{cache:'no-store'})).json();
+    if(!data.ok)return;
+    const cpu=data.cpu_percent==null?'--':`${data.cpu_percent}%`;
+    const memory=data.memory?`${data.memory.percent}%`:'--';
+    document.getElementById('resourceSummary').textContent=`CPU ${cpu} · MEM ${memory}`;
+    document.getElementById('resourceLoad').textContent=`CPU ${cpu} · MEM ${memory} · LOAD ${(data.load||[]).join(' / ')}`;
+    const box=document.getElementById('resourceProcesses');
+    box.replaceChildren();
+    (data.processes||[]).forEach(process=>{
+      const row=document.createElement('div');row.className='resource-row';
+      const pid=document.createElement('span');pid.textContent=process.pid;
+      const rss=document.createElement('span');rss.textContent=`${process.rss_mb}M`;
+      const name=document.createElement('span');name.className='proc-name';name.textContent=process.name;name.title=process.command;
+      row.append(pid,rss,name);
+      if(process.can_stop){
+        const stop=document.createElement('button');stop.className='resource-stop';stop.textContent='停止';
+        stop.onclick=event=>{event.stopPropagation();stopManagedProcess(process.pid,process.name)};
+        row.append(stop);
+      }else{
+        const locked=document.createElement('span');locked.textContent='只读';locked.style.color='var(--text3)';row.append(locked);
+      }
+      box.appendChild(row);
+    });
+  }catch(error){
+    document.getElementById('resourceSummary').textContent='监控离线';
+  }
+}
+setInterval(updateResourceMonitor,3000);
+updateResourceMonitor();
+
+// ── VLA ───────────────────────────────────────────────────────
+const VLA_PHASES = [
+  '感知: get_rgb_data() × 4',
+  '推理: fake_vla(rgb_data_dict)',
+  '碰撞检测: check_collision(start=[check_state])',
+  '执行: execute_joint_trajectory(traj, True)',
+];
+function runVLA() {
+  if (vlaRunning) return;
+  vlaRunning = true;
+  const T = parseInt(document.getElementById('trajT').value) || 200;
+  const dt = parseFloat(document.getElementById('trajDt').value) || 0.008;
+  document.getElementById('vlaExecStat').textContent = '执行中'; document.getElementById('vlaExecStat').className = 'stat-val warn';
+  addLog('vlaLog', `estimate_vla(robot, enable_sensor_set)`, 'cmd');
+  addLog('vlaLog', `build_trajectory(joint_traj, joint_groups, dt=${dt})`, 'cmd');
+  addLog('vlaLog', `T=${T} 帧, 总时长 ${(T*dt).toFixed(2)} s`, 'info');
+  let frame = 0, lastPhase = -1;
+  vlaTimer = setInterval(() => {
+    if (!vlaRunning) { clearInterval(vlaTimer); return; }
+    frame++;
+    const pct = (frame / T * 100).toFixed(1);
+    document.getElementById('vlaBar').style.width = pct + '%';
+    document.getElementById('vlaProgressText').textContent = `${frame} / ${T}`;
+    const ph = Math.min(3, Math.floor(frame / T * 4));
+    if (ph !== lastPhase) {
+      lastPhase = ph;
+      document.getElementById('vlaPhase').textContent = VLA_PHASES[ph];
+      addLog('vlaLog', VLA_PHASES[ph], 'info');
+    }
+    if (frame >= T) {
+      clearInterval(vlaTimer); vlaRunning = false;
+      document.getElementById('vlaExecStat').textContent = '完成'; document.getElementById('vlaExecStat').className = 'stat-val ok';
+      addLog('vlaLog', '✅ execute_joint_trajectory → ControlStatus.SUCCESS', 'ok');
+    }
+  }, dt * 1000 * 0.6);
+}
+function checkCollision() {
+  addLog('vlaLog', 'motion.check_collision(start=[check_state], enable_collision_check=True)', 'cmd');
+  setTimeout(() => addLog('vlaLog', '✅ 碰撞检测通过 — False (无碰撞)', 'ok'), 600);
+}
+function stopVLA() {
+  vlaRunning = false; clearInterval(vlaTimer);
+  document.getElementById('vlaExecStat').textContent = '已停止'; document.getElementById('vlaExecStat').className = 'stat-val warn';
+  addLog('vlaLog', 'robot.stop_trajectory_execution()', 'warn');
+}
+
+// ── LOG ───────────────────────────────────────────────────────
+function addLog(id, msg, level) {
+  const box = document.getElementById(id); if (!box) return;
+  const ts = new Date().toTimeString().slice(0, 8);
+  const line = document.createElement('div');
+  line.className = 'log-line log-' + level;
+  line.textContent = ts + '  ' + msg;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+  if (box.children.length > 200) box.removeChild(box.firstChild);
+}
+
+function addScanAtRobot(count=24) {
+  for (let i = 0; i < count; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = 6 + Math.random() * 24;
+    const p = {x:clamp(robotPos.x + Math.cos(a) * r, 0, 100), y:clamp(robotPos.y + Math.sin(a) * r, 0, 100)};
+    if (pointInPolygon(p, navMap.boundary)) navMap.points.push(p);
+  }
+  navMap.obstacles.forEach(o => {
+    for (let i = 0; i < 4; i++) {
+      const a = Math.random() * Math.PI * 2;
+      navMap.points.push({x:o.x + Math.cos(a) * (o.r + Math.random()*1.5), y:o.y + Math.sin(a) * (o.r + Math.random()*1.5)});
+    }
+  });
+  if (navMap.points.length > 1400) navMap.points.splice(0, navMap.points.length - 1400);
+  estimateScanBoundary();
+}
+function estimateScanBoundary() {
+  if (navMap.points.length < 12) { navMap.scanBoundary = navMap.boundary.map(p => ({...p})); return; }
+  const bins = Array.from({length:48}, () => null);
+  navMap.points.forEach(p => {
+    const a = (Math.atan2(p.y - robotPos.y, p.x - robotPos.x) + Math.PI * 2) % (Math.PI * 2);
+    const idx = Math.floor(a / (Math.PI * 2) * bins.length);
+    const d = Math.hypot(p.x - robotPos.x, p.y - robotPos.y);
+    if (!bins[idx] || d > bins[idx].d) bins[idx] = {...p, d, a};
+  });
+  navMap.scanBoundary = bins.filter(Boolean).sort((a,b) => a.a - b.a).map(({x,y}) => ({x,y}));
+}
+function drawPolygon(ctx, pts, w, h) {
+  if (!pts.length) return;
+  ctx.beginPath();
+  pts.forEach((p, i) => { const x = p.x/100*w, y = p.y/100*h; i ? ctx.lineTo(x,y) : ctx.moveTo(x,y); });
+  ctx.closePath();
+}
+function drawNavMap() {
+  const c = document.getElementById('navMapCanvas');
+  if (!c) return;
+  const map = document.getElementById('mapWrap');
+  const rect = map.getBoundingClientRect();
+  c.width = Math.max(1, Math.floor(rect.width)); c.height = Math.max(1, Math.floor(rect.height));
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height;
+  ctx.clearRect(0,0,w,h);
+  drawPolygon(ctx, navMap.boundary, w, h);
+  ctx.fillStyle = 'rgba(63,185,80,0.06)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(63,185,80,0.75)'; ctx.lineWidth = 2; ctx.stroke();
+  if (navMap.scanBoundary.length > 2) {
+    drawPolygon(ctx, navMap.scanBoundary, w, h);
+    ctx.setLineDash([5,4]); ctx.strokeStyle = 'rgba(47,129,247,.7)'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]);
+  }
+  ctx.fillStyle = 'rgba(47,129,247,.72)';
+  navMap.points.forEach(p => ctx.fillRect(p.x/100*w - 1, p.y/100*h - 1, 2, 2));
+  navMap.obstacles.forEach(o => {
+    ctx.beginPath(); ctx.arc(o.x/100*w, o.y/100*h, o.r/100*Math.min(w,h), 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(248,81,73,.18)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(248,81,73,.72)'; ctx.stroke();
+  });
+  if (navMap.path.length > 1) {
+    ctx.beginPath();
+    navMap.path.forEach((p, i) => { const x = p.x/100*w, y = p.y/100*h; i ? ctx.lineTo(x,y) : ctx.moveTo(x,y); });
+    ctx.strokeStyle = 'rgba(210,153,34,.95)'; ctx.lineWidth = 3; ctx.stroke();
+  }
+  document.getElementById('robotDot').style.left = robotPos.x + '%';
+  document.getElementById('robotDot').style.top = robotPos.y + '%';
+  document.getElementById('mapCoverage').textContent = Math.round(navMap.explored) + '%';
+  document.getElementById('mapScanText').textContent = `${importedGlobalMap ? '全局' : '局部'} · ${navMap.points.length} pts · 边界 ${navMap.scanBoundary.length} 段`;
+}
+
+// ── INIT ──────────────────────────────────────────────────────
+buildJointGrid();
+setupUrdfTwin();
+seedNavMap();
+buildLocList();
+loadLocations().then(() => drawNavMap());
+window.addEventListener('resize', ()=>{drawNavMap();drawUrdfTwin()});
+['jointLog','eeLog','gripLog','navLog','sensorLog','vlaLog'].forEach(id =>
+  addLog(id, '就绪 — 模拟模式 (galbot_sdk v1.6.2)', 'info'));
+function seedNavMap() { navMap.points = []; navMap.explored = 18; addScanAtRobot(90); drawNavMap(); }
+</script>
+
+<script type="module">
+
+import * as THREE from '/static/vendor/three.module.min.js';
+
+const mount = document.getElementById('navx-map3d');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x080c11);
+const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 1000);
+camera.position.set(0, -150, 105);
+camera.lookAt(0, 0, 0);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(window.devicePixelRatio || 1);
+mount.appendChild(renderer.domElement);
+scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+const grid = new THREE.GridHelper(180, 18, 0x334155, 0x1f2937);
+grid.rotation.x = Math.PI / 2;
+scene.add(grid);
+const root = new THREE.Group();
+scene.add(root);
+
+function resize3d(){
+  const r = mount.getBoundingClientRect();
+  renderer.setSize(Math.max(1, r.width), Math.max(1, r.height), false);
+  camera.aspect = Math.max(1, r.width) / Math.max(1, r.height);
+  camera.updateProjectionMatrix();
+}
+function makeLine(points, color, z=0.4){
+  if (!points || points.length < 2) return null;
+  const arr = [];
+  points.forEach(p => arr.push((p.x-50)*1.7, (50-p.y)*1.7, z));
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+  return new THREE.LineLoop(geo, new THREE.LineBasicMaterial({color}));
+}
+function update3d(detail){
+  root.clear();
+  const pts = detail.points || [];
+  const stride = Math.max(1, Math.floor(pts.length / 14000));
+  const arr = [];
+  const colors = [];
+  for(let i=0;i<pts.length;i+=stride){
+    const p = pts[i];
+    arr.push((p.x-50)*1.7, (50-p.y)*1.7, Math.max(-8, Math.min(28, (p.z||0)*5)));
+    colors.push(0.23, 0.55, 1.0);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  root.add(new THREE.Points(geo, new THREE.PointsMaterial({size:1.4, vertexColors:true})));
+  const boundary = makeLine(detail.boundary || [], 0x42d392, 1.2);
+  if (boundary) root.add(boundary);
+  const reachable = makeLine(detail.reachableBoundary || [], 0xf3b340, 2.4);
+  if (reachable) root.add(reachable);
+  (detail.obstacles || []).forEach(o => {
+    const line = makeLine(o.hull || [], 0xff6b66, 4);
+    if (line) root.add(line);
+  });
+  if (detail.frontier) {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(2.6, 16, 12),
+      new THREE.MeshBasicMaterial({color:0xff6b66})
+    );
+    mesh.position.set((detail.frontier.x-50)*1.7, (50-detail.frontier.y)*1.7, 7);
+    root.add(mesh);
+  }
+  resize3d();
+  renderer.render(scene, camera);
+}
+function animate(){
+  requestAnimationFrame(animate);
+  if (mount.style.display !== 'none') {
+    root.rotation.z += 0.0012;
+    renderer.render(scene, camera);
+  }
+}
+window.addEventListener('map3d:update', e => update3d(e.detail || {}));
+window.addEventListener('resize', resize3d);
+resize3d();
+animate();
+
+</script>
+<script>
+(function(){
+const API = '/api';
+const state = {
+  points: [],
+  mapPoints: [],
+  boundary: [],
+  reachableBoundary: [],
+  obstacles: [],
+  frontier: null,
+  path: [],
+  locations: [],
+  robotPose: [0,0,0,0,0,0,1],
+  robotMap: {x:50,y:50},
+  goal: null,
+  bounds: {minX:-5,maxX:5,minY:-5,maxY:5},
+  imported: null,
+  savedGlobalMap: null,
+  globalMapEnabled: true,
+  exploring: false,
+  exploreTimer: null,
+  headingPick: false,
+  mapView: '2d',
+  navReady: false,
+  mappingRunning: false,
+  mappingPose: null,
+  mappingPoll: null,
+  posePollBusy: false,
+  teleopTimer: null,
+  spatialFree: [],
+  spatialOccupied: [],
+  spatialFrontiers: [],
+  spatialBoundary: [],
+  spatialFrameSegments: [],
+  spatialObstacleSegments: [],
+  spatialResolution: .2,
+  frameSegmentsMap: [],
+  obstacleSegmentsMap: [],
+  viewLocked: false,
+  mapDragging: false,
+  mapDragMoved: false,
+  awaitingFrontier: false,
+  selectedLocationKey: null,
+  exploredGoals: [],
+  frontierSectorVisits: Array(8).fill(0),
+  frontierBlacklist: new Map(),
+  frontierDeadline: null,
+  eraseMode: false,
+  eraseDrawing: false,
+  eraseRadius: .35,
+  eraseCircles: [],
+  eraseCursor: null,
+  eraseJustFinished: false,
+  boundaryOnly: true,
+  clickToNavigate: true,
+  mainCameraEnabled: false,
+};
+
+function log(msg, cls='') {
+  const box = document.getElementById('navx-log');
+  const el = document.createElement('div');
+  el.className = 'line ' + cls;
+  el.textContent = new Date().toTimeString().slice(0,8) + '  ' + msg;
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+  while (box.children.length > 250) box.removeChild(box.firstChild);
+}
+function clamp(v,min,max){return Math.max(min,Math.min(max,v))}
+function yawToQuat(yaw){return [0,0,Math.sin(yaw/2),Math.cos(yaw/2)]}
+function quatToYaw(p){return Math.atan2(2*p[6]*p[5],1-2*p[5]*p[5])}
+function poseToMap(x,y){
+  const b = state.bounds;
+  return {
+    x: clamp((x - b.minX) / Math.max(.001, b.maxX - b.minX) * 100, 0, 100),
+    y: clamp((1 - (y - b.minY) / Math.max(.001, b.maxY - b.minY)) * 100, 0, 100)
+  };
+}
+function mapToPose(x,y){
+  const b = state.bounds;
+  return {
+    x: b.minX + x / 100 * (b.maxX - b.minX),
+    y: b.minY + (1 - y / 100) * (b.maxY - b.minY)
+  };
+}
+function fitBounds(points, extra=[]){
+  const xs = points.map(p=>+p[0]).filter(Number.isFinite);
+  const ys = points.map(p=>+p[1]).filter(Number.isFinite);
+  extra.forEach(p => { if (p.pose) { xs.push(+p.pose[0]); ys.push(+p.pose[1]); } });
+  xs.push(0); ys.push(0);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const padX = Math.max(.5, (maxX-minX)*.06);
+  const padY = Math.max(.5, (maxY-minY)*.06);
+  state.bounds = {minX:minX-padX, maxX:maxX+padX, minY:minY-padY, maxY:maxY+padY};
+}
+function cross(o,a,b){return (a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x)}
+function convexHull(points){
+  const pts = points.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y))
+    .sort((a,b)=>a.x===b.x?a.y-b.y:a.x-b.x);
+  if (pts.length <= 3) return pts;
+  const lower = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length-2], lower[lower.length-1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i=pts.length-1;i>=0;i--) {
+    const p = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length-2], upper[upper.length-1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  lower.pop(); upper.pop();
+  return lower.concat(upper);
+}
+function remapPoints(){
+  state.mapPoints = state.points.map(p => {
+    const m = poseToMap(+p[0], +p[1]);
+    return {x:m.x,y:m.y,z:+p[2]||0};
+  });
+  updateBoundary();
+  updateObstacleShapes();
+  updateReachableBoundary();
+  remapSpatialLayers();
+}
+function remapSpatialLayers(){
+  const mapPoint=p=>{const m=poseToMap(+p[0],+p[1]);return{x:m.x,y:m.y}};
+  const mapSegment=segment=>segment.map(mapPoint);
+  state.freeMap=state.spatialFree.map(mapPoint);
+  state.occupiedMap=state.spatialOccupied.map(mapPoint);
+  state.frameSegmentsMap=state.spatialFrameSegments.map(mapSegment);
+  state.obstacleSegmentsMap=state.spatialObstacleSegments.map(mapSegment);
+  state.frontierMap=state.spatialFrontiers.map(item=>{
+    const m=poseToMap(item.x,item.y);
+    return{...item,mx:m.x,my:m.y};
+  });
+  if(state.spatialBoundary.length>2){
+    state.boundary=state.spatialBoundary.map(mapPoint);
+    state.reachableBoundary=state.boundary.slice();
+  }
+}
+function zoomMap(factor,anchorX=50,anchorY=50){
+  const b=state.bounds;
+  const world=mapToPose(anchorX,anchorY);
+  const spanX=clamp((b.maxX-b.minX)*factor,1,120);
+  const spanY=clamp((b.maxY-b.minY)*factor,1,120);
+  const rx=anchorX/100, ry=1-anchorY/100;
+  state.bounds={
+    minX:world.x-rx*spanX,maxX:world.x+(1-rx)*spanX,
+    minY:world.y-ry*spanY,maxY:world.y+(1-ry)*spanY,
+  };
+  state.viewLocked=true;
+  remapPoints();
+  setRobotFromPose(state.robotPose);
+  if(state.goal){
+    const goalMap=poseToMap(state.goal.x,state.goal.y);
+    state.goal.mx=goalMap.x;state.goal.my=goalMap.y;
+    const goalEl=document.getElementById('navx-goal');
+    goalEl.style.left=goalMap.x+'%';goalEl.style.top=goalMap.y+'%';
+    state.path=[state.robotMap,{x:goalMap.x,y:goalMap.y}];
+  }
+  draw();
+}
+function fitSpatialView(){
+  const all=[...state.points,...state.spatialFree.map(p=>[p[0],p[1],0]),...state.spatialOccupied.map(p=>[p[0],p[1],0])];
+  fitBounds(all.length?all:[[state.robotPose[0],state.robotPose[1],0]],[]);
+  state.viewLocked=false;
+  remapPoints();
+  setRobotFromPose(state.robotPose);
+  draw();
+}
+function updateBoundary(){
+  if (state.mapPoints.length < 3) {
+    state.boundary = [];
+    return;
+  }
+  // Use a deterministic convex hull. This fixes the old failure mode where
+  // boundary bins stayed stale after importing a large global PCD.
+  const stride = Math.max(1, Math.floor(state.mapPoints.length / 3500));
+  state.boundary = convexHull(state.mapPoints.filter((_,i)=>i%stride===0));
+}
+function pointInPoly(p, poly){
+  let inside = false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const a=poly[i], b=poly[j];
+    if(((a.y>p.y)!==(b.y>p.y)) && p.x < (b.x-a.x)*(p.y-a.y)/((b.y-a.y)||.0001)+a.x) inside=!inside;
+  }
+  return inside;
+}
+function pointDensity(p, radius=7){
+  let count = 0;
+  const r2 = radius * radius;
+  const step = Math.max(1, Math.floor(state.mapPoints.length / 5000));
+  for(let i=0;i<state.mapPoints.length;i+=step){
+    const q = state.mapPoints[i];
+    const dx = q.x-p.x, dy = q.y-p.y;
+    if(dx*dx + dy*dy <= r2) count++;
+  }
+  return count;
+}
+function updateObstacleShapes(){
+  const cells = new Map();
+  const cell = 4;
+  state.mapPoints.forEach(p => {
+    const key = `${Math.floor(p.x/cell)},${Math.floor(p.y/cell)}`;
+    const item = cells.get(key) || {points:[], maxZ:-Infinity};
+    item.points.push(p);
+    item.maxZ = Math.max(item.maxZ, p.z || 0);
+    cells.set(key, item);
+  });
+  const occupied = new Set();
+  for (const [key,item] of cells) {
+    if (item.points.length >= 6 || item.maxZ > 0.22) occupied.add(key);
+  }
+  const seen = new Set();
+  const obstacles = [];
+  for (const key of occupied) {
+    if (seen.has(key)) continue;
+    const stack = [key], component = [];
+    seen.add(key);
+    while(stack.length){
+      const cur = stack.pop();
+      component.push(cur);
+      const [cx,cy] = cur.split(',').map(Number);
+      [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy]) => {
+        const nk = `${cx+dx},${cy+dy}`;
+        if (occupied.has(nk) && !seen.has(nk)) { seen.add(nk); stack.push(nk); }
+      });
+    }
+    if (component.length < 3) continue;
+    const pts = [];
+    component.forEach(k => {
+      const [cx,cy] = k.split(',').map(Number);
+      pts.push({x:cx*cell,y:cy*cell},{x:(cx+1)*cell,y:cy*cell},{x:(cx+1)*cell,y:(cy+1)*cell},{x:cx*cell,y:(cy+1)*cell});
+    });
+    const hull = convexHull(pts);
+    if (hull.length > 2) obstacles.push({hull, cells:component.length});
+  }
+  state.obstacles = obstacles.sort((a,b)=>b.cells-a.cells).slice(0,12);
+}
+function obstacleClearance(p){
+  if(!state.obstacles.length) return 99;
+  return Math.min(...state.obstacles.map(o => {
+    const c = o.hull.reduce((a,q)=>({x:a.x+q.x,y:a.y+q.y}),{x:0,y:0});
+    c.x /= o.hull.length; c.y /= o.hull.length;
+    const radius = Math.max(...o.hull.map(q => Math.hypot(q.x-c.x,q.y-c.y)));
+    return Math.hypot(p.x-c.x,p.y-c.y) - radius;
+  }));
+}
+function updateReachableBoundary(){
+  if(state.boundary.length < 3){ state.reachableBoundary = []; return; }
+  const center = state.boundary.reduce((a,p)=>({x:a.x+p.x,y:a.y+p.y}),{x:0,y:0});
+  center.x/=state.boundary.length; center.y/=state.boundary.length;
+  state.reachableBoundary = state.boundary.map(p => {
+    const vx=center.x-p.x, vy=center.y-p.y, len=Math.hypot(vx,vy)||1;
+    return {x:clamp(p.x+vx/len*5,2,98), y:clamp(p.y+vy/len*5,2,98)};
+  }).filter(p => pointInPoly(p,state.boundary) && obstacleClearance(p) > 4 && Math.hypot(p.x-state.robotMap.x,p.y-state.robotMap.y) < 72 && pointDensity(p,8) < 80);
+}
+function setRobotFromPose(pose){
+  state.robotPose = pose || [0,0,0,0,0,0,1];
+  state.robotMap = poseToMap(+state.robotPose[0]||0, +state.robotPose[1]||0);
+  const el = document.getElementById('navx-robot');
+  el.style.left = state.robotMap.x + '%';
+  el.style.top = state.robotMap.y + '%';
+  el.style.setProperty('--yaw', `${-quatToYaw(state.robotPose)}rad`);
+  document.getElementById('navx-poseText').textContent = `pose ${(+state.robotPose[0]).toFixed(2)}, ${(+state.robotPose[1]).toFixed(2)}`;
+}
+function draw(){
+  const canvas = document.getElementById('navx-map');
+  const wrap = document.getElementById('navx-mapWrap');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = wrap.getBoundingClientRect();
+  canvas.width = Math.max(1, Math.floor(rect.width*dpr));
+  canvas.height = Math.max(1, Math.floor(rect.height*dpr));
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  const w=rect.width,h=rect.height;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#080c11'; ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='rgba(80,100,125,.22)'; ctx.lineWidth=1;
+  for(let x=0;x<w;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}
+  for(let y=0;y<h;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}
+  if(!state.boundaryOnly){
+    ctx.fillStyle='rgba(66,211,146,.10)';
+    const freeStep=Math.max(1,Math.floor((state.freeMap||[]).length/18000));
+    for(let i=0;i<(state.freeMap||[]).length;i+=freeStep){
+      const p=state.freeMap[i];
+      ctx.fillRect(p.x/100*w-1.5,p.y/100*h-1.5,3,3);
+    }
+    ctx.fillStyle='rgba(255,107,102,.80)';
+    for(const p of state.occupiedMap||[]){
+      ctx.fillRect(p.x/100*w-2,p.y/100*h-2,4,4);
+    }
+    ctx.fillStyle='rgba(59,130,246,.62)';
+    const step=Math.max(1,Math.floor(state.mapPoints.length/12000));
+    for(let i=0;i<state.mapPoints.length;i+=step){
+      const p=state.mapPoints[i];
+      ctx.fillRect(p.x/100*w-1,p.y/100*h-1,2,2);
+    }
+  }
+  if(state.frameSegmentsMap.length){
+    ctx.strokeStyle='#42d392';ctx.lineWidth=1.5;ctx.beginPath();
+    for(const segment of state.frameSegmentsMap){
+      const a=segment[0],b=segment[1];
+      ctx.moveTo(a.x/100*w,a.y/100*h);ctx.lineTo(b.x/100*w,b.y/100*h);
+    }
+    ctx.stroke();
+  }else if(state.boundary.length>2){
+    ctx.strokeStyle='#42d392'; ctx.lineWidth=2; ctx.beginPath();
+    state.boundary.forEach((p,i)=>{const x=p.x/100*w,y=p.y/100*h; i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+    ctx.closePath(); ctx.stroke();
+  }
+  if(!state.boundaryOnly&&state.reachableBoundary.length>2){
+    ctx.strokeStyle='#f3b340'; ctx.lineWidth=2; ctx.setLineDash([7,5]); ctx.beginPath();
+    state.reachableBoundary.forEach((p,i)=>{const x=p.x/100*w,y=p.y/100*h; i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+    ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
+  }
+  state.obstacles.forEach(o => {
+    if(o.hull.length<3) return;
+    ctx.strokeStyle='rgba(255,107,102,.95)'; ctx.fillStyle='rgba(255,107,102,.10)'; ctx.lineWidth=1.5; ctx.beginPath();
+    o.hull.forEach((p,i)=>{const x=p.x/100*w,y=p.y/100*h; i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  });
+  if(state.obstacleSegmentsMap.length){
+    ctx.strokeStyle='rgba(255,107,102,.95)';ctx.lineWidth=2;ctx.beginPath();
+    for(const segment of state.obstacleSegmentsMap){
+      const a=segment[0],b=segment[1];
+      ctx.moveTo(a.x/100*w,a.y/100*h);ctx.lineTo(b.x/100*w,b.y/100*h);
+    }
+    ctx.stroke();
+  }
+  if(!state.boundaryOnly&&state.frontier){
+    ctx.fillStyle='#ff6b66'; ctx.beginPath();
+    ctx.arc(state.frontier.x/100*w,state.frontier.y/100*h,6,0,Math.PI*2); ctx.fill();
+  }
+  if(!state.boundaryOnly){
+    ctx.fillStyle='rgba(243,179,64,.85)';
+    for(const frontier of state.frontierMap||[]){
+      ctx.beginPath();
+      ctx.arc(frontier.mx/100*w,frontier.my/100*h,Math.min(8,3+Math.sqrt(frontier.cells||1)*.22),0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+  if(state.path.length>1){
+    ctx.strokeStyle='#f3b340'; ctx.lineWidth=2; ctx.beginPath();
+    state.path.forEach((p,i)=>{const x=p.x/100*w,y=p.y/100*h; i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+    ctx.stroke();
+  }
+  if(state.eraseMode&&state.eraseCursor){
+    const radiusPx=state.eraseRadius/Math.max(.001,state.bounds.maxX-state.bounds.minX)*w;
+    ctx.strokeStyle='#ff8d88';ctx.fillStyle='rgba(255,107,102,.12)';ctx.lineWidth=1.5;ctx.beginPath();
+    ctx.arc(state.eraseCursor.x/100*w,state.eraseCursor.y/100*h,radiusPx,0,Math.PI*2);
+    ctx.fill();ctx.stroke();
+  }
+  document.getElementById('navx-pointCount').textContent = `${state.mapPoints.length} pts`;
+  document.getElementById('navx-boundaryCount').textContent = `框线 ${state.frameSegmentsMap.length||state.boundary.length}`;
+  document.getElementById('navx-reachableCount').textContent = `可达 ${state.reachableBoundary.length}`;
+  document.getElementById('navx-obstacleCount').textContent = `障碍 ${state.obstacles.length}`;
+  document.getElementById('navx-coverage').textContent = `覆盖 ${Math.min(100, Math.round(state.mapPoints.length/90))}%`;
+  window.dispatchEvent(new CustomEvent('map3d:update', {detail: {
+    points: state.mapPoints,
+    boundary: state.boundary,
+    reachableBoundary: state.reachableBoundary,
+    obstacles: state.obstacles,
+    frontier: state.frontier
+  }}));
+}
+function setMapView(view){
+  state.mapView = view;
+  document.getElementById('navx-map').style.display = view === '2d' ? 'block' : 'none';
+  document.getElementById('navx-map3d').style.display = view === '3d' ? 'block' : 'none';
+  draw();
+}
+function toggleMainCamera(){
+  state.mainCameraEnabled=!state.mainCameraEnabled;
+  const image=document.getElementById('navx-mainCamera');
+  const button=document.getElementById('navx-mainCameraToggle');
+  const status=document.getElementById('navx-cameraStatus');
+  if(state.mainCameraEnabled){
+    image.style.display='block';
+    image.src='/api/camera/main?t='+Date.now();
+    button.innerHTML='<i class="ti ti-video-off"></i> 关闭视角';
+    status.textContent='HEAD_LEFT_CAMERA · 采集中';
+  }else{
+    image.removeAttribute('src');
+    image.style.display='none';
+    button.innerHTML='<i class="ti ti-video"></i> 开启视角';
+    status.textContent='HEAD_LEFT_CAMERA · 已关闭';
+  }
+}
+function applyMapData(data){
+  state.imported = data;
+  state.savedGlobalMap = data;
+  state.globalMapEnabled = true;
+  const toggle = document.getElementById('navx-globalMapToggle');
+  if (toggle) toggle.checked = true;
+  state.points = data.points || [];
+  fitBounds(state.points, state.locations);
+  remapPoints();
+  setRobotFromPose(state.robotPose);
+  draw();
+  document.getElementById('navx-mapStatus').textContent =
+    `已加载 ${data.source} · ${data.sampled_points}/${data.total_points} · X[${data.bounds.min_x},${data.bounds.max_x}] Y[${data.bounds.min_y},${data.bounds.max_y}]`;
+  log(`PCD 加载成功: ${data.sampled_points}/${data.total_points}, boundary=${state.boundary.length}`, 'ok');
+}
+function toggleGlobalMap(enabled){
+  state.globalMapEnabled = enabled;
+  if (enabled) {
+    if (state.savedGlobalMap) applyMapData(state.savedGlobalMap);
+    else loadDefaultPcd();
+    return;
+  }
+  state.imported = null;
+  state.points = [];
+  state.mapPoints = [];
+  state.boundary = [];
+  state.frontier = null;
+  state.path = [];
+  resetLocalBounds();
+  draw();
+  document.getElementById('navx-mapStatus').textContent='全局地图已关闭，可启动局部探索建图';
+  log('全局地图已关闭，切换到局部探索建图模式','warn');
+}
+async function loadDefaultPcd(){
+  state.globalMapEnabled = true;
+  const toggle = document.getElementById('navx-globalMapToggle');
+  if (toggle) toggle.checked = true;
+  document.getElementById('navx-mapStatus').textContent = '正在加载默认 PCD...';
+  try{
+    const r = await fetch(API+'/nav/map/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.msg||'加载失败');
+    applyMapData(d);
+  }catch(e){document.getElementById('navx-mapStatus').textContent='加载失败: '+e.message; log('PCD 加载失败: '+e.message,'err')}
+}
+async function uploadPcd(file){
+  if(!file) return;
+  const fd = new FormData(); fd.append('file', file);
+  try{
+    const r = await fetch(API+'/nav/map/import',{method:'POST',body:fd});
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.msg||'解析失败');
+    applyMapData(d);
+  }catch(e){log('上传 PCD 失败: '+e.message,'err')}
+  finally{document.getElementById('navx-pcdFile').value=''}
+}
+function clearMap(){
+  state.points=[];state.mapPoints=[];state.boundary=[];state.reachableBoundary=[];state.frontier=null;state.path=[];state.imported=null;
+  state.spatialFree=[];state.spatialOccupied=[];state.spatialFrontiers=[];state.spatialBoundary=[];
+  state.spatialFrameSegments=[];state.spatialObstacleSegments=[];
+  state.freeMap=[];state.occupiedMap=[];state.frontierMap=[];state.frameSegmentsMap=[];state.obstacleSegmentsMap=[];
+  draw();
+  document.getElementById('navx-mapStatus').textContent='已清空点云';
+}
+function renderMappingStatus(mapping){
+  state.mappingRunning=!!mapping.running;
+  state.mappingPose=Array.isArray(mapping.pose)?mapping.pose:state.mappingPose;
+  const pose=state.mappingPose;
+  const parts=[
+    `状态 ${mapping.status||'idle'}`,
+    `关键帧 ${mapping.keyframes||0}`,
+    mapping.time_delay==null?'延时 --':`延时 ${mapping.time_delay}`,
+    pose?`位姿 ${pose[0].toFixed(2)}, ${pose[1].toFixed(2)}`:'位姿 --',
+  ];
+  document.getElementById('navx-mappingStatus').textContent=parts.join(' · ');
+}
+async function pollRobotPose(){
+  if(state.posePollBusy)return;
+  state.posePollBusy=true;
+  try{
+    const response=await fetch(API+'/nav/current_pose?t='+Date.now(),{cache:'no-store'});
+    const data=await response.json();
+    if(data.ok&&Array.isArray(data.pose)&&data.pose.length===7&&data.source!=='SIMULATED'){
+      setRobotFromPose(data.pose);
+    }
+  }catch(error){
+    // Mapping/status polling reports connection failures; avoid flooding the log at 4 Hz.
+  }finally{
+    state.posePollBusy=false;
+  }
+}
+async function pollMapping(){
+  try{
+    const d=await (await fetch(API+'/mapping/status')).json();
+    if(d.ok) renderMappingStatus(d.mapping);
+    if(d.mapping?.running){
+      const live=await (await fetch(API+'/mapping/spatial?t='+Date.now())).json();
+      const spatial=live.spatial;
+      if(live.ok&&spatial){
+        if(Array.isArray(spatial.pose)){state.robotPose=spatial.pose}
+        state.points=Array.isArray(spatial.points)?spatial.points:[];
+        state.spatialFree=Array.isArray(spatial.free_cells)?spatial.free_cells:[];
+        state.spatialOccupied=Array.isArray(spatial.occupied_cells)?spatial.occupied_cells:[];
+        state.spatialFrontiers=Array.isArray(spatial.frontiers)?spatial.frontiers:[];
+        state.spatialBoundary=Array.isArray(spatial.boundary)?spatial.boundary:[];
+        state.spatialFrameSegments=Array.isArray(spatial.frame_segments)?spatial.frame_segments:[];
+        state.spatialObstacleSegments=Array.isArray(spatial.obstacle_segments)?spatial.obstacle_segments:[];
+        state.spatialResolution=+spatial.resolution||.2;
+        if(!state.viewLocked&&state.points.length)fitBounds(
+          [...state.points,...state.spatialFree.map(p=>[p[0],p[1],0])],
+          []
+        );
+        remapPoints();
+        setRobotFromPose(state.robotPose);
+        document.getElementById('navx-boundaryCount').textContent=`边界 ${spatial.counts?.frontier||0}`;
+        document.getElementById('navx-reachableCount').textContent=`可达 ${spatial.counts?.frontier_clusters||0}`;
+        document.getElementById('navx-obstacleCount').textContent=`障碍 ${spatial.counts?.occupied||0}`;
+        draw();
+        if(state.exploring&&state.goal&&state.awaitingFrontier){
+          const distance=Math.hypot(state.robotPose[0]-state.goal.x,state.robotPose[1]-state.goal.y);
+          if(distance<.45){
+            state.awaitingFrontier=false;
+            state.frontierDeadline=null;
+            state.exploredGoals.push({x:state.goal.x,y:state.goal.y,time:Date.now()});
+            state.exploredGoals=state.exploredGoals.slice(-80);
+            setTimeout(exploreStep,300);
+          }else if(state.frontierDeadline&&Date.now()>state.frontierDeadline){
+            const key=`${state.goal.x.toFixed(1)},${state.goal.y.toFixed(1)}`;
+            state.frontierBlacklist.set(key,Date.now()+120000);
+            state.awaitingFrontier=false;
+            state.frontierDeadline=null;
+            log(`frontier 导航超时，暂时拉黑 ${key}`,'warn');
+            setTimeout(exploreStep,300);
+          }
+        }
+      }
+    }
+  }catch(e){document.getElementById('navx-mappingStatus').textContent='建图状态读取失败: '+e.message}
+}
+async function startOfficialMapping(){
+  state.globalMapEnabled=false;
+  const toggle=document.getElementById('navx-globalMapToggle');
+  if(toggle)toggle.checked=false;
+  clearMap();
+  resetLocalBounds();
+  try{
+    const r=await fetch(API+'/mapping/start',{method:'POST'});
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.msg||'启动失败');
+    renderMappingStatus(d.mapping);
+    log('官方 mapping_server 已启动，可用 W/A/S/D/Q/E 遥控建图','ok');
+    pollMapping();
+    return true;
+  }catch(e){log('启动建图失败: '+e.message,'err');return false}
+}
+async function stopOfficialMapping(){
+  await sendTeleop('stop');
+  try{
+    const d=await (await fetch(API+'/mapping/stop',{method:'POST'})).json();
+    if(!d.ok)throw new Error(d.msg||'停止失败');
+    renderMappingStatus(d.mapping);
+    log('建图已停止；未保存的地图不会保留','warn');
+  }catch(e){log('停止建图失败: '+e.message,'err')}
+}
+async function relocalizeCurrent(poseOverride=null){
+  const pose=poseOverride||state.mappingPose||state.robotPose||[0,0,0,0,0,0,1];
+  try{
+    const r=await fetch(API+'/nav/relocalize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pose})});
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.msg||'重定位失败');
+    state.robotPose=pose;
+    setRobotFromPose(pose);
+    log('重定位成功，可以直接选择目标导航','ok');
+    return true;
+  }catch(e){log('重定位失败: '+e.message,'err');return false}
+}
+async function saveMappingAndNavigate(){
+  await sendTeleop('stop');
+  document.getElementById('navx-mappingStatus').textContent='正在保存地图，请勿关闭建图程序...';
+  try{
+    const r=await fetch(API+'/mapping/save',{method:'POST'});
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.msg||'保存失败');
+    if(d.pcd){
+      const mapResponse=await fetch(API+'/nav/map/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:d.pcd})});
+      const mapData=await mapResponse.json();
+      if(!mapData.ok)throw new Error(mapData.msg||'新地图加载失败');
+      applyMapData(mapData);
+    }
+    renderMappingStatus(d.mapping||{status:'saved',running:false,keyframes:0,pose:d.pose});
+    log(`地图保存成功: ${d.map_dir||d.pcd||'默认目录'}`,'ok');
+    await relocalizeCurrent(d.pose||state.mappingPose);
+  }catch(e){log('保存地图失败，建图保持运行: '+e.message,'err');pollMapping()}
+}
+async function sendTeleop(key){
+  try{
+    await fetch(API+'/mapping/teleop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,linear:.2,angular:.4})});
+  }catch(e){log('遥控发送失败: '+e.message,'err')}
+}
+async function nudgeForward(){
+  const button=document.getElementById('navx-nudgeButton');
+  const direction=document.getElementById('navx-nudgeDirection').value;
+  const distance=clamp(+document.getElementById('navx-nudgeDistance').value||.3,.05,1);
+  const directionNames={forward:'向前',backward:'向后',left:'向左',right:'向右'};
+  if(button.disabled)return;
+  button.disabled=true;
+  button.textContent='脱困执行中...';
+  log(`切换 CHASSIS_POSE_CTRL，${directionNames[direction]}脱困 ${distance.toFixed(2)}m`,'warn');
+  try{
+    const response=await fetch(API+'/nav/nudge',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({direction,distance}),
+    });
+    const data=await response.json();
+    if(!data.ok)throw new Error(data.msg||'脱困失败');
+    const wait=Math.ceil((data.stop_after||3)*1000);
+    log(`${data.status==='SIMULATED'?'模拟':'真机'}${directionNames[direction]}脱困已发送，${(+data.stop_after).toFixed(1)}秒后自动停止`,'ok');
+    setTimeout(()=>{button.disabled=false;button.innerHTML='<i class="ti ti-arrows-move"></i> 执行脱困'},wait+200);
+  }catch(error){
+    button.disabled=false;
+    button.innerHTML='<i class="ti ti-arrows-move"></i> 执行脱困';
+    log('前进脱困失败: '+error.message,'err');
+  }
+}
+function beginTeleop(key){
+  if(!state.mappingRunning){log('请先启动建图，再使用底盘遥控','warn');return}
+  clearInterval(state.teleopTimer);
+  sendTeleop(key);
+  if(key!=='stop')state.teleopTimer=setInterval(()=>sendTeleop(key),140);
+}
+function endTeleop(){
+  clearInterval(state.teleopTimer);
+  state.teleopTimer=null;
+  sendTeleop('stop');
+}
+function resetLocalBounds(){
+  const x = +state.robotPose[0] || 0;
+  const y = +state.robotPose[1] || 0;
+  state.bounds = {minX:x-4, maxX:x+4, minY:y-4, maxY:y+4};
+  setRobotFromPose(state.robotPose);
+}
+function setGoalMap(mx,my,yaw=0,label='地图点'){
+  const pose = mapToPose(mx,my);
+  state.goal = {mx,my,x:pose.x,y:pose.y,yaw,label};
+  document.getElementById('navx-goalX').value = pose.x.toFixed(3);
+  document.getElementById('navx-goalY').value = pose.y.toFixed(3);
+  document.getElementById('navx-goalYaw').value = yaw.toFixed(3);
+  const el = document.getElementById('navx-goal');
+  el.style.display='block'; el.style.left=mx+'%'; el.style.top=my+'%';
+  el.style.setProperty('--yaw', `${-yaw}rad`);
+  state.path=[state.robotMap,{x:mx,y:my}];
+  const output=document.getElementById('navx-locationOutput');
+  if(output)output.textContent=`${label} · X ${pose.x.toFixed(3)} · Y ${pose.y.toFixed(3)} · Yaw ${yaw.toFixed(3)}`;
+  draw();
+  log(`目标 ${label}: ${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}, yaw=${yaw.toFixed(2)}`);
+}
+function setGoalFromInputs(){
+  const x=+document.getElementById('navx-goalX').value, y=+document.getElementById('navx-goalY').value, yaw=+document.getElementById('navx-goalYaw').value||0;
+  const m=poseToMap(x,y);
+  setGoalMap(m.x,m.y,yaw,'手动');
+}
+function setEraseRadius(value){
+  state.eraseRadius=clamp(+value||.35,.1,1.5);
+  draw();
+}
+function toggleEraseMode(){
+  state.eraseMode=!state.eraseMode;
+  state.eraseDrawing=false;
+  state.eraseCircles=[];
+  state.eraseCursor=null;
+  document.getElementById('navx-eraseToggle').classList.toggle('active',state.eraseMode);
+  document.getElementById('navx-mapWrap').style.cursor=state.eraseMode?'crosshair':'';
+  if(state.eraseMode&&state.mapView!=='2d')setMapView('2d');
+  log(state.eraseMode?`障碍擦除已开启，画笔半径 ${state.eraseRadius.toFixed(2)} m`:'障碍擦除已关闭',state.eraseMode?'warn':'');
+  draw();
+}
+function eraseAtPointer(event){
+  const rect=document.getElementById('navx-mapWrap').getBoundingClientRect();
+  const mx=clamp((event.clientX-rect.left)/rect.width*100,0,100);
+  const my=clamp((event.clientY-rect.top)/rect.height*100,0,100);
+  const center=mapToPose(mx,my);
+  state.eraseCursor={x:mx,y:my};
+  const previous=state.eraseCircles[state.eraseCircles.length-1];
+  if(previous&&Math.hypot(previous.x-center.x,previous.y-center.y)<state.eraseRadius*.25){draw();return}
+  const circle={x:center.x,y:center.y,radius:state.eraseRadius};
+  state.eraseCircles.push(circle);
+  const outside=point=>Math.hypot(+point[0]-center.x,+point[1]-center.y)>state.eraseRadius;
+  state.points=state.points.filter(outside);
+  state.spatialOccupied=state.spatialOccupied.filter(outside);
+  remapPoints();
+  draw();
+}
+async function finishErase(){
+  if(!state.eraseDrawing)return;
+  state.eraseDrawing=false;
+  state.eraseJustFinished=true;
+  const circles=state.eraseCircles.splice(0);
+  if(!circles.length)return;
+  const syncingSpatial=state.mappingRunning||state.spatialFree.length>0||state.spatialOccupied.length>0;
+  try{
+    const response=await fetch(API+'/mapping/spatial/erase',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({circles}),
+    });
+    const data=await response.json();
+    if(!data.ok)throw new Error(data.msg||'擦除失败');
+    const spatial=data.spatial||{};
+    if(syncingSpatial){
+      state.points=Array.isArray(spatial.points)?spatial.points:state.points;
+      state.spatialFree=Array.isArray(spatial.free_cells)?spatial.free_cells:state.spatialFree;
+      state.spatialOccupied=Array.isArray(spatial.occupied_cells)?spatial.occupied_cells:state.spatialOccupied;
+      state.spatialFrontiers=Array.isArray(spatial.frontiers)?spatial.frontiers:state.spatialFrontiers;
+      state.spatialBoundary=Array.isArray(spatial.boundary)?spatial.boundary:state.spatialBoundary;
+      state.spatialFrameSegments=Array.isArray(spatial.frame_segments)?spatial.frame_segments:state.spatialFrameSegments;
+      state.spatialObstacleSegments=Array.isArray(spatial.obstacle_segments)?spatial.obstacle_segments:state.spatialObstacleSegments;
+    }
+    remapPoints();draw();
+    log(`障碍编辑完成：移除 ${data.erased?.cells||0} 个占据栅格、${data.erased?.points||0} 个点`,'ok');
+  }catch(error){
+    log('障碍擦除同步失败: '+error.message,'err');
+  }
+}
+function exportEditedPcd(){
+  if(!state.points.length){log('当前没有可导出的点云','warn');return}
+  const rows=state.points.map(point=>[
+    Number(point[0]).toFixed(5),
+    Number(point[1]).toFixed(5),
+    Number(point[2]||0).toFixed(5),
+  ].join(' '));
+  const count=rows.length;
+  const header=[
+    '# .PCD v0.7','VERSION 0.7','FIELDS x y z','SIZE 4 4 4','TYPE F F F',
+    'COUNT 1 1 1',`WIDTH ${count}`,'HEIGHT 1','VIEWPOINT 0 0 0 1 0 0 0',
+    `POINTS ${count}`,'DATA ascii',
+  ];
+  const blob=new Blob([header.concat(rows).join('\n')+'\n'],{type:'application/octet-stream'});
+  const link=document.createElement('a');
+  link.href=URL.createObjectURL(blob);
+  link.download='edited_global_cloud.pcd';
+  link.click();
+  setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+  log(`已导出编辑后的 PCD：${count} 点`,'ok');
+}
+function setBoundaryOnly(enabled){state.boundaryOnly=!!enabled;draw()}
+function setClickNavigate(enabled){state.clickToNavigate=!!enabled}
+function exploredTargetIsReachable(target){
+  if(!state.spatialFree.length)return true;
+  const tolerance=Math.max(.45,state.spatialResolution*3);
+  const nearestFree=Math.min(...state.spatialFree.map(point=>Math.hypot(+point[0]-target.x,+point[1]-target.y)));
+  const nearestObstacle=state.spatialOccupied.length
+    ?Math.min(...state.spatialOccupied.map(point=>Math.hypot(+point[0]-target.x,+point[1]-target.y)))
+    :Infinity;
+  return nearestFree<=tolerance&&nearestObstacle>Math.max(.28,state.spatialResolution*1.5);
+}
+async function clickMap(e){
+  if(e.target.closest?.('button,input'))return;
+  if(state.eraseMode||state.eraseJustFinished){state.eraseJustFinished=false;return}
+  if(state.mapDragMoved){state.mapDragMoved=false;return}
+  const r=e.currentTarget.getBoundingClientRect();
+  const mx=(e.clientX-r.left)/r.width*100, my=(e.clientY-r.top)/r.height*100;
+  if (state.headingPick && state.goal) {
+    const dir = mapToPose(mx, my);
+    const yaw = Math.atan2(dir.y - state.goal.y, dir.x - state.goal.x);
+    state.headingPick = false;
+    setGoalMap(state.goal.mx, state.goal.my, yaw, '朝向已选');
+    log(`目标朝向已更新 yaw=${yaw.toFixed(2)}`, 'ok');
+    return;
+  }
+  const target = mapToPose(mx, my);
+  if(state.clickToNavigate&&!exploredTargetIsReachable(target)){
+    log('该位置尚未探索或距离障碍过近，请点击边界内的可达区域','warn');
+    return;
+  }
+  const yaw=Math.atan2(target.y-(+state.robotPose[1]||0), target.x-(+state.robotPose[0]||0));
+  setGoalMap(mx,my,yaw,'地图点');
+  if(state.clickToNavigate)await sendGoal();
+}
+function startHeadingPick(){
+  if(!state.goal){log('先在地图上选择目标点，再选择朝向','warn'); return}
+  state.headingPick = true;
+  log('朝向选择中：在地图上点击目标要面向的方向','warn');
+}
+async function sendGoal(){
+  if(!state.goal) setGoalFromInputs();
+  const q=yawToQuat(state.goal.yaw);
+  const pose=[state.goal.x,state.goal.y,0,...q];
+  try{
+    const r=await fetch(API+'/nav/goto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pose})});
+    const d=await r.json();
+    if(!d.ok) throw new Error(d.msg||'导航失败');
+    log('导航指令已发送: '+JSON.stringify(pose.map(v=>+v.toFixed(3))),'ok');
+    state.awaitingFrontier=state.exploring;
+    state.frontierDeadline=state.exploring?Date.now()+120000:null;
+    if(!state.navReady) simulateArrive();
+  }catch(e){log('导航失败: '+e.message,'err')}
+}
+function simulateArrive(){
+  const start={...state.robotMap}, end={x:state.goal.mx,y:state.goal.my};
+  let t=0;
+  const timer=setInterval(()=>{
+    t=Math.min(1,t+.05);
+    state.robotMap={x:start.x+(end.x-start.x)*t,y:start.y+(end.y-start.y)*t};
+    const pose=mapToPose(state.robotMap.x,state.robotMap.y);
+    state.robotPose=[pose.x,pose.y,0,...yawToQuat(state.goal.yaw)];
+    document.getElementById('navx-robot').style.left=state.robotMap.x+'%';
+    document.getElementById('navx-robot').style.top=state.robotMap.y+'%';
+    document.getElementById('navx-poseText').textContent=`pose ${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}`;
+    draw();
+    if(t>=1){clearInterval(timer);state.awaitingFrontier=false;log('到达目标点', 'ok');if(state.exploring)setTimeout(exploreStep,350)}
+  },70);
+}
+function pickFrontier(){
+  if(state.frontierMap?.length){
+    const now=Date.now();
+    for(const [key,expires] of state.frontierBlacklist)if(expires<=now)state.frontierBlacklist.delete(key);
+    const candidates=state.frontierMap
+      .filter(item=>(item.distance==null||item.distance>.55)&&item.mx>1&&item.mx<99&&item.my>1&&item.my<99)
+      .filter(item=>!state.frontierBlacklist.has(`${item.x.toFixed(1)},${item.y.toFixed(1)}`))
+      .map(item=>{
+        const revisit=state.exploredGoals.some(goal=>Math.hypot(goal.x-item.x,goal.y-item.y)<1.2)?8:0;
+        const angle=Math.atan2(item.y-state.robotPose[1],item.x-state.robotPose[0]);
+        const sector=(Math.floor((angle+Math.PI)/(Math.PI*2)*8)+8)%8;
+        const coveragePenalty=state.frontierSectorVisits[sector]*1.4;
+        return{...item,sector,score:(item.utility||0)-revisit-coveragePenalty};
+      })
+      .sort((a,b)=>b.score-a.score);
+    if(candidates.length){
+      const selected=candidates[0];
+      state.frontierSectorVisits[selected.sector]+=1;
+      return{x:selected.mx,y:selected.my,score:selected.score,world:selected};
+    }
+  }
+  if(state.mappingRunning)return null;
+  updateReachableBoundary();
+  const boundary = state.reachableBoundary.length > 2 ? state.reachableBoundary : state.boundary;
+  if(boundary.length<3) return null;
+  const center = boundary.reduce((a,p)=>({x:a.x+p.x,y:a.y+p.y}),{x:0,y:0});
+  center.x/=boundary.length; center.y/=boundary.length;
+  const candidates = boundary.map((p,i)=>{
+    const prev=boundary[(i-1+boundary.length)%boundary.length], next=boundary[(i+1)%boundary.length];
+    const edge=Math.hypot(next.x-prev.x,next.y-prev.y);
+    const vx=center.x-p.x, vy=center.y-p.y, len=Math.hypot(vx,vy)||1;
+    const goal={x:clamp(p.x+vx/len*6,2,98), y:clamp(p.y+vy/len*6,2,98)};
+    const travel=Math.hypot(goal.x-state.robotMap.x, goal.y-state.robotMap.y);
+    const density=state.mapPoints.filter(q=>Math.hypot(q.x-goal.x,q.y-goal.y)<8).length;
+    return {...goal, score:edge*2+travel*.25-density*.5, travel};
+  }).filter(c=>c.travel>6 && pointInPoly(c,state.boundary) && obstacleClearance(c)>4).sort((a,b)=>b.score-a.score);
+  return candidates[0] || null;
+}
+function ensureLocalSeed(){
+  document.getElementById('navx-mapStatus').textContent=
+    state.mapPoints.length?'实时占据地图更新中':'等待 LiDAR 点云和机器人位姿...';
+}
+async function exploreStep(){
+  if(!state.exploring) return;
+  ensureLocalSeed();
+  const f=pickFrontier();
+  state.frontier=f;
+  if(!f){log('等待可达 frontier：继续采集点云','warn');setTimeout(exploreStep,1200);return}
+  const pose=f.world?{x:f.world.x,y:f.world.y}:mapToPose(f.x,f.y);
+  const yaw=f.world
+    ?Math.atan2(f.world.y-(+state.robotPose[1]||0),f.world.x-(+state.robotPose[0]||0))
+    :Math.atan2(state.robotMap.y-f.y,f.x-state.robotMap.x);
+  setGoalMap(f.x,f.y,yaw,'Frontier');
+  log(`frontier: ${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}, score=${f.score.toFixed(1)}`);
+  await sendGoal();
+}
+async function startFrontierExplore(){
+  if(state.exploring) return;
+  if(!state.mappingRunning&&!(await startOfficialMapping()))return;
+  state.exploring=true;
+  log('自主探索启动：跳过已有 PCD 校准，直接建图并选择 frontier','ok');
+  exploreStep();
+}
+async function startLocalMappingExplore(){
+  state.globalMapEnabled = false;
+  const toggle = document.getElementById('navx-globalMapToggle');
+  if (toggle) toggle.checked = false;
+  clearMap();
+  resetLocalBounds();
+  ensureLocalSeed();
+  state.exploring = false;
+  log('局部探索建图启动：全局地图已关闭，从当前位置创建边界地图','ok');
+  await startFrontierExplore();
+}
+function stopFrontierExplore(){
+  state.exploring=false;
+  state.frontier=null;
+  draw();
+  log('自主探索已停止','warn');
+}
+async function stopNav(){
+  stopFrontierExplore();
+  try{await fetch(API+'/nav/stop',{method:'POST'}); log('停止导航已发送','warn')}catch(e){log('停止导航失败: '+e.message,'err')}
+}
+function fleetInputs(){
+  return [1,2,3].map(i => {
+    const value = document.getElementById('navx-fleetIp'+i).value.trim();
+    return value ? {id:'robot_'+i, name:'Robot '+i, ip:value, role:i===1?'leader':'worker'} : null;
+  }).filter(Boolean);
+}
+function renderFleetStatus(robots){
+  const text = (robots || []).map(r => `${r.name}:${r.status || 'unknown'}@${r.url}`).join(' | ') || '未配置机器人';
+  document.getElementById('navx-fleetStatus').textContent = text;
+}
+async function connectFleet(){
+  const robots = fleetInputs();
+  try{
+    const r = await fetch(API+'/fleet/robots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({robots})});
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.msg||'连接失败');
+    renderFleetStatus(d.robots);
+    log(`已配置多机协同: ${d.robots.length} 台`, 'ok');
+  }catch(e){log('多机配置失败: '+e.message,'err')}
+}
+async function pingFleet(){
+  try{
+    const r = await fetch(API+'/fleet/ping',{method:'POST'});
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.msg||'心跳失败');
+    renderFleetStatus(d.robots);
+    log('多机心跳: '+d.robots.map(x=>`${x.id}:${x.status}`).join(', '), 'ok');
+  }catch(e){log('多机心跳失败: '+e.message,'err')}
+}
+async function dispatchFleetTask(){
+  const description = document.getElementById('navx-fleetTask').value.trim() || '共同探索当前区域并共享地图';
+  const assignments = {};
+  fleetInputs().forEach((r,i)=>{assignments[r.id] = i===0 ? 'lead_mapping_and_task_split' : `explore_frontier_sector_${i}`});
+  const goal = state.goal ? {x:state.goal.x,y:state.goal.y,yaw:state.goal.yaw} : {};
+  try{
+    const r = await fetch(API+'/fleet/task',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      description,
+      mode:'cooperative_mapping_navigation',
+      goal,
+      assignments,
+      map_summary:{points:state.mapPoints.length,boundary:state.boundary.length,reachable:state.reachableBoundary.length,obstacles:state.obstacles.length}
+    })});
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.msg||'任务下发失败');
+    log('协同任务已下发: '+description, 'ok');
+    document.getElementById('navx-fleetStatus').textContent = d.deliveries.map(x=>`${x.robot}:${x.ok?'sent':'fail'}`).join(' | ') || '本机已记录任务';
+  }catch(e){log('协同任务失败: '+e.message,'err')}
+}
+function renderLocations(){
+  const box=document.getElementById('navx-locList');
+  box.replaceChildren();
+  state.locations.forEach(location=>{
+    const item=document.createElement('div');
+    item.className='loc'+(location.key===state.selectedLocationKey?' active':'');
+    const title=document.createElement('b');
+    title.textContent=`${location.id??''}. ${location.name}`;
+    const detail=document.createElement('small');
+    detail.textContent=`${location.key} · X ${(+location.pose[0]).toFixed(3)} · Y ${(+location.pose[1]).toFixed(3)} · Yaw ${(+location.yaw||quatToYaw(location.pose)).toFixed(3)}`;
+    const remove=document.createElement('button');
+    remove.className='loc-delete';
+    remove.type='button';
+    remove.title=`删除 ${location.name}`;
+    remove.setAttribute('aria-label',`删除 ${location.name}`);
+    remove.textContent='×';
+    remove.addEventListener('click',event=>{event.stopPropagation();deletePresetLocation(location.key,location.name)});
+    item.append(title,detail,remove);
+    item.addEventListener('click',()=>selectLocation(location.key));
+    box.appendChild(item);
+  });
+}
+function selectLocation(key){
+  const l=state.locations.find(x=>x.key===key); if(!l) return;
+  state.selectedLocationKey=key;
+  const m=poseToMap(+l.pose[0],+l.pose[1]);
+  setGoalMap(m.x,m.y,l.yaw||quatToYaw(l.pose),l.name);
+  renderLocations();
+}
+async function refreshPresetLocations(){
+  const response=await fetch(API+'/nav/locations');
+  const data=await response.json();
+  if(!data.ok)throw new Error(data.msg||'点位读取失败');
+  state.locations=data.locations||[];
+  renderLocations();
+  return data;
+}
+async function savePresetLocation(){
+  const name=document.getElementById('navx-locationName').value.trim();
+  if(!state.goal){log('请先点击地图选择新点位','warn');return}
+  if(!name){log('请输入新点位名称','warn');return}
+  const quaternion=yawToQuat(state.goal.yaw||0);
+  const pose=[state.goal.x,state.goal.y,0,...quaternion];
+  try{
+    const response=await fetch(API+'/nav/locations',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,pose}),
+    });
+    const data=await response.json();
+    if(!data.ok)throw new Error(data.msg||'点位保存失败');
+    document.getElementById('navx-locationName').value='';
+    await refreshPresetLocations();
+    selectLocation(data.location.key);
+    log(`新预设点位已保存: ${name} (${pose[0].toFixed(3)}, ${pose[1].toFixed(3)})`,'ok');
+  }catch(error){log('保存预设点位失败: '+error.message,'err')}
+}
+async function deletePresetLocation(key,name){
+  if(!confirm(`确认删除预设点位“${name}”？`))return;
+  try{
+    const response=await fetch(API+'/nav/locations/'+encodeURIComponent(key),{method:'DELETE'});
+    const data=await response.json();
+    if(!data.ok)throw new Error(data.msg||'删除失败');
+    if(state.selectedLocationKey===key){
+      state.selectedLocationKey=null;
+      state.goal=null;
+      state.path=[];
+      document.getElementById('navx-goal').style.display='none';
+      document.getElementById('navx-locationOutput').textContent='点位已删除，请重新选择位置';
+      draw();
+    }
+    await refreshPresetLocations();
+    log(`预设点位已删除: ${name}`,'warn');
+  }catch(error){log('删除预设点位失败: '+error.message,'err')}
+}
+async function init(){
+  window.addEventListener('resize', draw);
+  const mapWrap=document.getElementById('navx-mapWrap');
+  mapWrap.addEventListener('wheel',event=>{
+    event.preventDefault();
+    const rect=mapWrap.getBoundingClientRect();
+    const anchorX=(event.clientX-rect.left)/rect.width*100;
+    const anchorY=(event.clientY-rect.top)/rect.height*100;
+    zoomMap(event.deltaY<0?.82:1.22,anchorX,anchorY);
+  },{passive:false});
+  mapWrap.addEventListener('contextmenu',event=>event.preventDefault());
+  mapWrap.addEventListener('pointerdown',event=>{
+    if(state.eraseMode&&event.button===0){
+      event.preventDefault();
+      state.eraseDrawing=true;state.eraseCircles=[];
+      mapWrap.setPointerCapture?.(event.pointerId);
+      eraseAtPointer(event);
+      return;
+    }
+    if(!(event.button===1||event.button===2||event.shiftKey))return;
+    event.preventDefault();
+    state.mapDragging=true;state.mapDragMoved=false;
+    state.dragPoint={x:event.clientX,y:event.clientY};
+    mapWrap.setPointerCapture?.(event.pointerId);
+  });
+  mapWrap.addEventListener('pointermove',event=>{
+    if(state.eraseMode){
+      const rect=mapWrap.getBoundingClientRect();
+      state.eraseCursor={
+        x:clamp((event.clientX-rect.left)/rect.width*100,0,100),
+        y:clamp((event.clientY-rect.top)/rect.height*100,0,100),
+      };
+      if(state.eraseDrawing)eraseAtPointer(event);else draw();
+      return;
+    }
+    if(!state.mapDragging)return;
+    const dx=event.clientX-state.dragPoint.x,dy=event.clientY-state.dragPoint.y;
+    if(Math.abs(dx)+Math.abs(dy)>2)state.mapDragMoved=true;
+    state.dragPoint={x:event.clientX,y:event.clientY};
+    const rect=mapWrap.getBoundingClientRect(),b=state.bounds;
+    const moveX=-dx/Math.max(1,rect.width)*(b.maxX-b.minX);
+    const moveY=dy/Math.max(1,rect.height)*(b.maxY-b.minY);
+    state.bounds={minX:b.minX+moveX,maxX:b.maxX+moveX,minY:b.minY+moveY,maxY:b.maxY+moveY};
+    state.viewLocked=true;
+    remapPoints();setRobotFromPose(state.robotPose);draw();
+  });
+  const finishMapDrag=()=>{state.mapDragging=false;finishErase()};
+  mapWrap.addEventListener('pointerup',finishMapDrag);
+  mapWrap.addEventListener('pointercancel',finishMapDrag);
+  document.querySelectorAll('#p-nav-current [data-teleop]').forEach(button=>{
+    const key=button.dataset.teleop;
+    button.addEventListener('pointerdown',event=>{event.preventDefault();beginTeleop(key)});
+    button.addEventListener('pointerup',endTeleop);
+    button.addEventListener('pointerleave',endTeleop);
+    button.addEventListener('pointercancel',endTeleop);
+  });
+  const teleopKeys=new Set(['w','a','s','d','q','e']);
+  window.addEventListener('keydown',event=>{
+    if(!document.getElementById('p-nav-current').classList.contains('active'))return;
+    if(['INPUT','TEXTAREA','SELECT'].includes(event.target.tagName))return;
+    const key=event.key.toLowerCase();
+    if(!teleopKeys.has(key)||event.repeat)return;
+    event.preventDefault();
+    beginTeleop(key);
+  });
+  window.addEventListener('keyup',event=>{
+    if(teleopKeys.has(event.key.toLowerCase()))endTeleop();
+  });
+  state.mappingPoll=setInterval(pollMapping,500);
+  setInterval(pollRobotPose,250);
+  setInterval(() => {
+    const img = document.getElementById('navx-mainCamera');
+    if (img&&state.mainCameraEnabled) img.src='/api/camera/main?t='+Date.now();
+  }, 1000);
+  try{
+    const s=await (await fetch(API+'/status')).json();
+    state.navReady=!!s.nav_ready;
+    document.getElementById('navx-navMode').textContent=s.nav_ready?'真机导航':'模拟模式';
+    document.getElementById('navx-navMode').className='pill '+(s.nav_ready?'ok':'warn');
+    document.getElementById('navx-pathInfo').textContent=s.location_map || 'location_map';
+    document.getElementById('navx-sysStatus').textContent=JSON.stringify(s,null,2);
+    if(Array.isArray(s.pose)) setRobotFromPose(s.pose);
+  }catch(e){log('状态读取失败: '+e.message,'err')}
+  try{
+    const d=await refreshPresetLocations();
+    fitBounds(state.points,state.locations);remapPoints();draw();log('点位加载: '+d.source,'ok');
+  }catch(e){log('点位加载失败: '+e.message,'err')}
+  draw();
+  loadDefaultPcd();
+  pollMapping();
+  pollRobotPose();
+}
+window.navCurrent = {clearMap,clickMap,connectFleet,dispatchFleetTask,loadDefaultPcd,pingFleet,selectLocation,savePresetLocation,deletePresetLocation,sendGoal,setGoalFromInputs,setMapView,startFrontierExplore,startHeadingPick,startLocalMappingExplore,stopFrontierExplore,stopNav,toggleGlobalMap,uploadPcd,startOfficialMapping,stopOfficialMapping,saveMappingAndNavigate,relocalizeCurrent,zoomMap,fitSpatialView,toggleEraseMode,setEraseRadius,exportEditedPcd,nudgeForward,setBoundaryOnly,setClickNavigate,toggleMainCamera};
+init();
+})();
+</script>
+
+</body>
+</html>
