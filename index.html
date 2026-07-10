@@ -105,20 +105,63 @@
   }
   .quick button:hover { color: var(--text); background: rgba(214,90,49,.08); }
   .typing { color: var(--muted); font-style: italic; }
+
+  /* 适老化 · 大字体切换按钮 */
+  .a11y-toggle {
+    flex: none; cursor: pointer; font-weight: 700; font-size: .82rem;
+    color: var(--teal); background: rgba(29,109,115,.1);
+    border: 1px solid rgba(29,109,115,.22); border-radius: 999px; padding: 7px 12px;
+  }
+  .a11y-toggle[aria-pressed="true"] { color: #fffaf4; background: var(--teal); }
+  .header-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+
+  /* 动作步骤时间线(命令卡里直观展示机械臂动作顺序) */
+  .steps { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; vertical-align: middle; }
+  .steps .step {
+    background: rgba(214,90,49,.12); color: var(--accent); font-weight: 700;
+    border-radius: 8px; padding: 2px 9px; font-size: .82rem;
+  }
+  .steps .arrow { color: var(--muted); font-weight: 700; }
+
+  /* 偏好记忆提示(一顿饭结束时,小瓜记住的吃饭偏好) */
+  .pref-note {
+    align-self: flex-start; max-width: 88%; font-size: .82rem; color: var(--teal);
+    background: rgba(29,109,115,.08); border: 1px solid rgba(29,109,115,.2);
+    border-radius: 14px; padding: 8px 12px; line-height: 1.5;
+  }
+
+  /* 键盘可达:统一聚焦轮廓,方便用键盘/辅助设备操作 */
+  button:focus-visible, textarea:focus-visible {
+    outline: 3px solid var(--teal); outline-offset: 2px;
+  }
+
+  /* 适老化 · 大字体模式(放大关键文字与可点区域) */
+  body.big .bubble { font-size: 1.25rem; line-height: 1.75; }
+  body.big header h1 { font-size: 1.55rem; }
+  body.big header p { font-size: .98rem; }
+  body.big textarea { font-size: 1.2rem; }
+  body.big .send { font-size: 1.15rem; height: 54px; }
+  body.big .quick button { font-size: 1rem; padding: 9px 15px; }
+  body.big .meta, body.big .pref-note { font-size: .96rem; }
+  body.big .status-pill, body.big .a11y-toggle { font-size: .92rem; }
 </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <div class="avatar">🍚</div>
+    <div class="avatar" aria-hidden="true">🍚</div>
     <div>
       <h1>小瓜</h1>
       <p>陪你慢慢吃饭的伙伴 · 温柔家人感</p>
     </div>
-    <div class="status-pill" id="statusPill">状态:还没取餐</div>
+    <div class="header-actions">
+      <button class="a11y-toggle" id="fontToggle" type="button" aria-pressed="false"
+              aria-label="切换大字体模式" title="放大文字,方便阅读">大字体</button>
+      <div class="status-pill" id="statusPill" role="status" aria-live="polite">状态:还没取餐</div>
+    </div>
   </header>
 
-  <div class="chat" id="chat">
+  <div class="chat" id="chat" role="log" aria-live="polite" aria-relevant="additions" aria-label="与小瓜的对话记录">
     <div class="row bot">
       <div class="mini-avatar bot">🍚</div>
       <div class="bubble">你好呀,我是小瓜~ 想吃饭了就跟我说一声,咱们慢慢来。</div>
@@ -126,10 +169,10 @@
   </div>
 
   <div class="composer">
-    <textarea id="input" rows="1" placeholder="对小瓜说点什么…(回车发送,Shift+回车换行)"></textarea>
-    <button class="send" id="send">发送</button>
+    <textarea id="input" rows="1" aria-label="对小瓜说的话" placeholder="对小瓜说点什么…(回车发送,Shift+回车换行)"></textarea>
+    <button class="send" id="send" type="button" aria-label="发送消息">发送</button>
   </div>
-  <div class="quick" id="quick">
+  <div class="quick" id="quick" role="group" aria-label="快捷短语">
     <button data-t="喂我吃饭吧">喂我吃饭吧</button>
     <button data-t="再来一口">再来一口</button>
     <button data-t="不吃了,够了">不吃了</button>
@@ -146,6 +189,13 @@ const sendBtn = document.getElementById('send');
 const statusPill = document.getElementById('statusPill');
 const FETCH_TIMEOUT_MS = 18000;
 
+// 转义所有模型/后端返回的文本再插入 innerHTML,避免 XSS(reason 等由 LLM 生成)。
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function addBubble(text, who) {
   const row = document.createElement('div');
   row.className = 'row ' + who;
@@ -157,18 +207,37 @@ function addBubble(text, who) {
   return row;
 }
 
+// 机械臂动作 key → 中文标签(时间线展示用)
+const STEP_LABELS = { acquire_food: '取餐', deliver_food: '送餐', stop_feeding: '停止' };
+
 function addMeta(data) {
   const el = document.createElement('div');
   el.className = 'meta';
+  const conf = Number(data.confidence).toFixed(2);
+  const reason = escapeHtml(data.reason);
   if (data.type === 'COMMAND') {
-    const steps = data.action && data.action.steps ? data.action.steps.join(' → ') : '—';
-    el.innerHTML = `<span class="tag cmd">命令</span> 意图 <code>${data.intent}</code> · 置信 ${Number(data.confidence).toFixed(2)}<br>
-                    机械臂动作:<code>${steps}</code><br>
-                    <span style="opacity:.8">判断依据:${data.reason || ''}</span>`;
+    const rawSteps = (data.action && Array.isArray(data.action.steps)) ? data.action.steps : [];
+    const stepsHtml = rawSteps.length
+      ? rawSteps.map(s => `<span class="step">${escapeHtml(STEP_LABELS[s] || s)}</span>`).join('<span class="arrow">→</span>')
+      : '<span class="step">—</span>';
+    el.innerHTML = `<span class="tag cmd">命令</span> 意图 <code>${escapeHtml(data.intent)}</code> · 置信 ${conf}<br>
+                    机械臂动作:<span class="steps">${stepsHtml}</span><br>
+                    <span style="opacity:.8">判断依据:${reason}</span>`;
   } else {
-    el.innerHTML = `<span class="tag talk">对话</span> 置信 ${Number(data.confidence).toFixed(2)}
-                    <br><span style="opacity:.8">判断依据:${data.reason || ''}</span>`;
+    el.innerHTML = `<span class="tag talk">对话</span> 置信 ${conf}
+                    <br><span style="opacity:.8">判断依据:${reason}</span>`;
   }
+  chat.appendChild(el);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+// 一顿饭结束时,小瓜从对话里学到并记住的吃饭偏好(后端在 meal_ended 时回传 prefSaved)。
+function addPrefNote(prefs) {
+  const items = prefs.map(p => escapeHtml(p && p.value)).filter(Boolean).join('、');
+  if (!items) return;
+  const el = document.createElement('div');
+  el.className = 'pref-note';
+  el.innerHTML = `<b>小瓜记住了</b>:这顿饭学到的偏好 —— ${items}`;
   chat.appendChild(el);
   chat.scrollTop = chat.scrollHeight;
 }
@@ -201,6 +270,7 @@ async function send(text) {
     } else {
       addMeta(data);
       addBubble(data.reply, 'bot');
+      if (Array.isArray(data.prefSaved) && data.prefSaved.length) addPrefNote(data.prefSaved);
       if (data.feedingState) statusPill.textContent = '状态:' + data.feedingState;
     }
   } catch (e) {
@@ -229,6 +299,22 @@ sendBtn.addEventListener('click', () => send(input.value));
 document.getElementById('quick').addEventListener('click', e => {
   if (e.target.dataset.t) send(e.target.dataset.t);
 });
+
+// 适老化 · 大字体模式:切换 body.big,并记住用户的选择。
+const fontToggle = document.getElementById('fontToggle');
+function applyBigFont(on) {
+  document.body.classList.toggle('big', on);
+  fontToggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+}
+try {
+  applyBigFont(localStorage.getItem('xiaogua_big_font') === '1');
+} catch (e) { /* localStorage 不可用时忽略,默认小字体 */ }
+fontToggle.addEventListener('click', () => {
+  const on = !document.body.classList.contains('big');
+  applyBigFont(on);
+  try { localStorage.setItem('xiaogua_big_font', on ? '1' : '0'); } catch (e) { /* 忽略持久化失败 */ }
+});
+
 input.focus();
 </script>
 </body>
