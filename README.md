@@ -47,6 +47,16 @@ python agent.py "喂我吃饭吧"    # 单句模式
 
 只依赖 Python 标准库,无需 pip install。密钥留在后端,前端页面永远拿不到。
 
+## 跑测试
+
+离线单元测试,不联网、不需要真实密钥(用 dummy 占位即可):
+
+```bash
+MEALMATE_API_KEY=dummy python -m unittest discover -s tests -v
+```
+
+覆盖:意图 JSON 抠取与收容校验、本地快路径规则、喂饭状态机(FEED_FIRST / FEED_CONTINUE / STOP_FEED)、偏好去重落盘。需要 LLM 的路径用打桩替换,验证异常/非 JSON 一律安全兜底为对话,绝不误触发命令。
+
 ## 文件结构
 
 | 文件 | 作用 |

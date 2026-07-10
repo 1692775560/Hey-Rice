@@ -21,6 +21,9 @@
   状态 `role=status`、按钮与输入框 `aria-label`、统一键盘聚焦轮廓。
 - 前端动作时间线:命令卡把机械臂步骤渲染成「取餐 → 送餐」中文时间线;
   一顿饭结束时展示小瓜记住的吃饭偏好(复用后端 `prefSaved`)。
+- `tests/` 离线单元测试(标准库 unittest,共 42 例):覆盖意图 JSON 抠取与收容校验、
+  本地快路径、喂饭状态机(FEED_FIRST/FEED_CONTINUE/STOP_FEED)、偏好去重落盘;
+  LLM 路径用打桩替换,不联网、不需真实密钥。
 
 ### Changed
 - `.env.example` 与 `config.py` 默认值对齐(模型默认 Haiku、超时 12 秒、重试 1 次等),
