@@ -6,27 +6,24 @@
 <title>小瓜 · 喂饭陪伴对话</title>
 <style>
   :root {
-    --bg: #f7f0e4;
-    --paper: #fffaf3;
-    --text: #221812;
-    --muted: #70594f;
-    --accent: #d65a31;
-    --teal: #1d6d73;
-    --gold: #f2bf5e;
-    --line: rgba(96,65,48,.14);
-    --bubble-user: linear-gradient(135deg, #d65a31, #ea7b44);
-    --bubble-bot: #fffaf3;
-    --shadow: 0 12px 40px rgba(70,34,16,.12);
+    --bg: #eef1f0;
+    --paper: #ffffff;
+    --text: #252321;
+    --muted: #696663;
+    --accent: #c94d2b;
+    --teal: #176b68;
+    --gold: #efb844;
+    --line: rgba(37,35,33,.14);
+    --bubble-user: #c94d2b;
+    --bubble-bot: #ffffff;
+    --shadow: 0 8px 24px rgba(31,42,40,.08);
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; min-height: 100vh;
     font-family: "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
     color: var(--text);
-    background:
-      radial-gradient(circle at top left, rgba(242,191,94,.35), transparent 32%),
-      radial-gradient(circle at right 20%, rgba(29,109,115,.16), transparent 30%),
-      linear-gradient(180deg,#f5eee2,#f7f0e4 45%,#f3ecdf);
+    background: var(--bg);
     display: flex; justify-content: center; padding: 24px 14px;
   }
   .app { width: min(100%, 640px); display: flex; flex-direction: column; height: calc(100vh - 48px); }
@@ -34,19 +31,39 @@
   header {
     display: flex; align-items: center; gap: 14px;
     padding: 16px 20px; margin-bottom: 14px;
-    background: rgba(255,250,243,.8); backdrop-filter: blur(12px);
-    border: 1px solid rgba(255,255,255,.5); border-radius: 22px; box-shadow: var(--shadow);
+    background: var(--paper);
+    border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow);
   }
   .avatar {
-    width: 52px; height: 52px; border-radius: 16px; flex: none;
+    width: 52px; height: 52px; border-radius: 8px; flex: none;
     display: grid; place-items: center; font-size: 28px;
-    background: linear-gradient(135deg, var(--gold), var(--accent));
+    background: var(--gold);
   }
   header h1 { margin: 0; font-size: 1.3rem; }
   header p { margin: 2px 0 0; color: var(--muted); font-size: .86rem; }
   .status-pill {
     margin-left: auto; font-size: .78rem; color: var(--teal); font-weight: 700;
     background: rgba(29,109,115,.1); padding: 7px 12px; border-radius: 999px; text-align: right;
+  }
+
+  .voice-panel {
+    display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 12px;
+    align-items: center; margin-bottom: 12px; padding: 10px 12px;
+    background: rgba(255,250,243,.86); border: 1px solid var(--line); border-radius: 8px;
+  }
+  .mic-toggle {
+    width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--line);
+    background: #fff; color: var(--teal); cursor: pointer; font-size: 1.25rem;
+    display: grid; place-items: center; transition: background .15s ease, color .15s ease;
+  }
+  .mic-toggle.active { background: var(--teal); color: #fff; }
+  .mic-toggle:disabled { opacity: .55; cursor: wait; }
+  .voice-copy { min-width: 0; }
+  .voice-status { display: block; color: var(--teal); font-size: .86rem; font-weight: 700; }
+  .voice-status[data-state="error"] { color: var(--accent); }
+  .voice-transcript {
+    display: block; min-height: 1.4em; margin-top: 2px; color: var(--muted);
+    font-size: .86rem; overflow-wrap: anywhere;
   }
 
   .chat {
@@ -59,10 +76,10 @@
     width: 34px; height: 34px; border-radius: 11px; flex: none; display: grid;
     place-items: center; font-size: 18px;
   }
-  .mini-avatar.bot { background: linear-gradient(135deg,var(--gold),var(--accent)); }
+  .mini-avatar.bot { background: var(--gold); }
   .mini-avatar.user { background: rgba(29,109,115,.16); }
   .bubble {
-    max-width: 78%; padding: 12px 16px; line-height: 1.6; border-radius: 18px;
+    max-width: 78%; padding: 12px 16px; line-height: 1.6; border-radius: 8px;
     box-shadow: var(--shadow); font-size: 1rem;
   }
   .user .bubble { background: var(--bubble-user); color: #fffaf4; border-bottom-right-radius: 6px; }
@@ -73,7 +90,7 @@
     align-self: flex-start; max-width: 88%;
     font-size: .82rem; color: var(--muted);
     background: rgba(255,255,255,.55); border: 1px dashed var(--line);
-    border-radius: 14px; padding: 8px 12px; line-height: 1.55;
+    border-radius: 8px; padding: 8px 12px; line-height: 1.55;
   }
   .meta .tag { display: inline-block; font-weight: 700; padding: 1px 8px; border-radius: 999px; margin-right: 6px; }
   .tag.cmd  { background: rgba(214,90,49,.14); color: var(--accent); }
@@ -82,8 +99,8 @@
 
   .composer {
     margin-top: 12px; display: flex; gap: 10px; align-items: flex-end;
-    padding: 12px; background: rgba(255,250,243,.86); backdrop-filter: blur(12px);
-    border: 1px solid rgba(255,255,255,.5); border-radius: 22px; box-shadow: var(--shadow);
+    padding: 12px; background: var(--paper);
+    border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow);
   }
   textarea {
     flex: 1; resize: none; border: none; outline: none; background: transparent;
@@ -91,13 +108,12 @@
   }
   .send {
     flex: none; border: none; cursor: pointer; color: #fffaf4; font-weight: 700;
-    padding: 0 22px; height: 46px; border-radius: 14px;
-    background: linear-gradient(135deg,var(--accent),#ea7b44);
+    padding: 0 22px; height: 46px; border-radius: 8px;
+    background: var(--accent);
     transition: transform .15s ease, opacity .15s ease;
   }
   .send:hover { transform: translateY(-1px); }
   .send:disabled { opacity: .5; cursor: default; transform: none; }
-  .hint { text-align: center; color: var(--muted); font-size: .78rem; margin: 8px 0 0; }
   .quick { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
   .quick button {
     border: 1px solid var(--line); background: rgba(255,255,255,.5); color: var(--muted);
@@ -105,6 +121,14 @@
   }
   .quick button:hover { color: var(--text); background: rgba(214,90,49,.08); }
   .typing { color: var(--muted); font-style: italic; }
+  @media (max-width: 520px) {
+    body { padding: 12px 8px; }
+    .app { height: calc(100vh - 24px); }
+    header { padding: 12px; }
+    .status-pill { font-size: .72rem; padding: 6px 8px; }
+    .bubble { max-width: 84%; }
+    .send { padding: 0 16px; }
+  }
 </style>
 </head>
 <body>
@@ -113,10 +137,25 @@
     <div class="avatar">🍚</div>
     <div>
       <h1>小瓜</h1>
-      <p>陪你慢慢吃饭的伙伴 · 温柔家人感</p>
+      <p>陪你慢慢吃饭</p>
     </div>
     <div class="status-pill" id="statusPill">状态:还没取餐</div>
   </header>
+
+  <section class="voice-panel" aria-label="语音输入">
+    <button
+      class="mic-toggle"
+      id="micToggle"
+      type="button"
+      aria-label="开启或关闭麦克风"
+      aria-pressed="false"
+      title="开启或关闭麦克风"
+    >&#127908;</button>
+    <div class="voice-copy">
+      <span class="voice-status" id="voiceStatus" data-state="idle">麦克风已关闭</span>
+      <output class="voice-transcript" id="voiceTranscript">等待语音输入</output>
+    </div>
+  </section>
 
   <div class="chat" id="chat">
     <div class="row bot">
@@ -126,7 +165,7 @@
   </div>
 
   <div class="composer">
-    <textarea id="input" rows="1" placeholder="对小瓜说点什么…(回车发送,Shift+回车换行)"></textarea>
+    <textarea id="input" rows="1" placeholder="输入文字…"></textarea>
     <button class="send" id="send">发送</button>
   </div>
   <div class="quick" id="quick">
@@ -136,7 +175,6 @@
     <button data-t="今天天气真好啊">闲聊一句</button>
     <button data-t="别停">别停</button>
   </div>
-  <p class="hint">意图识别与对话由两个 LLM 分别处理;命令会触发机械臂动作(当前为演示)。</p>
 </div>
 
 <script>
@@ -229,7 +267,21 @@ sendBtn.addEventListener('click', () => send(input.value));
 document.getElementById('quick').addEventListener('click', e => {
   if (e.target.dataset.t) send(e.target.dataset.t);
 });
+window.addEventListener('hey-rice-final-transcript', event => {
+  addBubble(event.detail.text, 'user');
+});
+window.addEventListener('hey-rice-agent-result', event => {
+  const data = event.detail.result;
+  if (!data || data.error) {
+    addBubble('(' + ((data && data.error) || 'Agent 处理失败') + ')', 'bot');
+    return;
+  }
+  addMeta(data);
+  addBubble(data.reply || '好的。', 'bot');
+  if (data.feedingState) statusPill.textContent = '状态:' + data.feedingState;
+});
 input.focus();
 </script>
+<script src="/static/voice-client.js"></script>
 </body>
 </html>

@@ -1,0 +1,1 @@
+"""Hey-Rice test package."""

@@ -5,3 +5,6 @@ __pycache__/
 .env.*
 !.env.example
 preferences_store.json
+.venv/
+models/
+.gstack/
