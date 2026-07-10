@@ -245,6 +245,10 @@ def main():
             print("  语音待配置: " + ", ".join(missing))
     else:
         print("  语音网关: 已通过 MEALMATE_VOICE_ENABLED=0 关闭")
+    if robot_tts.enabled():
+        print(f"  机器人语音: 回复将推送到 {os.environ.get('HEYRICE_ROBOT_TTS_URL')}")
+    else:
+        print("  机器人语音: 未配置(设 HEYRICE_ROBOT_TTS_URL 开启)")
     print(f"  打开浏览器访问:  http://{HOST}:{PORT}")
     print("=" * 52)
     try:
