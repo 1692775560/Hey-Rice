@@ -20,9 +20,18 @@
 ## 怎么跑
 
 ```bash
-# 1. 设置密钥(从环境变量读,不要写进代码)
+# 1. 安装语音依赖
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 2. 下载本地唤醒模型(模型进入已忽略的 models/ 目录)
+python scripts/setup_kws.py
+
+# 3. 设置密钥(从环境变量读,不要写进代码)
 export MEALMATE_API_KEY=你的密钥
-# 可选:export MEALMATE_API_BASE=https://api.inferera.com/v1
+export DOUBAO_APP_ID=你的豆包应用ID
+export DOUBAO_ACCESS_TOKEN=你的豆包AccessToken
 ```
 
 **最简方式 · 一键脚本**
@@ -37,7 +46,7 @@ export MEALMATE_API_KEY=你的密钥
 python server.py
 # 浏览器打开 http://127.0.0.1:8000
 ```
-页面上直接对小瓜说话,能看到:小瓜的温柔回复 + 意图识别结果(命令/对话)+ 触发的机械臂动作。
+页面上点击麦克风按钮授权后,麦克风持续监听。说“小瓜小瓜”,再说“我想吃饭”,最终文本会通过 WebSocket 进入 Hey-Rice agent。手动文本输入仍然可用。
 
 **方式 B · 命令行**
 ```bash
@@ -45,7 +54,48 @@ python agent.py               # 交互模式,逐句输入
 python agent.py "喂我吃饭吧"    # 单句模式
 ```
 
-只依赖 Python 标准库,无需 pip install。密钥留在后端,前端页面永远拿不到。
+不需要语音时可设置 `MEALMATE_VOICE_ENABLED=0`,此时文本聊天仍只依赖原有服务。所有密钥留在后端,前端页面永远拿不到。
+
+## 语音链路
+
+```text
+浏览器麦克风
+  -> 16 kHz PCM WebSocket
+  -> 本地 sherpa-onnx 检测“小瓜小瓜”
+  -> 唤醒后的音频进入豆包流式 ASR
+  -> 最终文本发送到 /ws/agent
+  -> Hey-Rice agent 处理并返回结果
+```
+
+浏览器连接 `ws://127.0.0.1:8765/ws/voice`;agent 连接 `ws://127.0.0.1:8765/ws/agent`。服务默认启动一个内置 agent 客户端,它通过这个 WebSocket 调用现有 `server.process(text)`。接入对方独立 agent 时设置:
+
+```bash
+export MEALMATE_EMBED_AGENT=0
+```
+
+对方 agent 接收:
+
+```json
+{
+  "type": "final_transcript",
+  "requestId": "uuid",
+  "sessionId": "uuid",
+  "text": "我想吃饭",
+  "timestamp": 1783670400000
+}
+```
+
+处理完成后按相同 `requestId` 返回:
+
+```json
+{
+  "type": "agent_result",
+  "requestId": "uuid",
+  "result": {"reply": "好嘞", "intent": "FEED_FIRST"}
+}
+```
+
+豆包接入使用优化双向流式端点,音频格式为 PCM/raw、16 kHz、16 bit、单声道。协议参考[火山引擎流式语音识别大模型文档](https://docs.volcengine.com/docs/6561/1354869?lang=zh)。本地唤醒使用[sherpa-onnx Keyword Spotting](https://k2-fsa.github.io/sherpa/onnx/kws/index.html)。
 
 ## 跑测试
 
@@ -67,6 +117,11 @@ MEALMATE_API_KEY=dummy python -m unittest discover -s tests -v
 | `chat_agent.py` | **对话 LLM**:小瓜人设(温柔家人感)回话 |
 | `actions.py` | 动作层:取餐/送餐/停(**现在 mock**,留好接口) |
 | `agent.py` | 主循环:输入 → 意图识别 → 命令调动作 / 对话调小瓜 |
+| `voice_gateway.py` | 浏览器语音、本地唤醒、豆包 ASR 和 agent WebSocket 状态机 |
+| `doubao_asr.py` | 豆包流式 ASR 单句会话适配器 |
+| `wakeword.py` | sherpa-onnx 本地“小瓜小瓜”检测器 |
+| `agent_ws_client.py` | 最终文本到现有 Hey-Rice agent 的 WebSocket 适配器 |
+| `scripts/setup_kws.py` | 下载并准备本地关键词模型 |
 
 ## 接真实动作 API
 
@@ -87,4 +142,5 @@ def _call_arm(action, **params):
 - **收容兜底**:模型返回非法/超时/非 JSON → 一律安全落到「当对话去追问」,**绝不误触发命令**。
 - **命令确认话术用固定模板**,不交给自由对话 LLM(保证"说的"和"做的"一致)。
 - **密钥只从环境变量读**,不硬编码、不提交。
-```
+- **唤醒前不上云**:等待唤醒期间的音频只进入本地 KWS,不创建豆包 ASR 会话。
+- **最终文本才进 agent**:中间识别结果不会触发意图或机械臂动作。

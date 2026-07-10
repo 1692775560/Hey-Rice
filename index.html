@@ -49,6 +49,33 @@
     background: rgba(29,109,115,.1); padding: 7px 12px; border-radius: 999px; text-align: right;
   }
 
+  /* 语音输入面板(本地唤醒词 + 豆包流式 ASR 的状态与实时文本) */
+  .voice-panel {
+    display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 14px;
+    align-items: center; margin-bottom: 14px; padding: 12px 16px;
+    background: rgba(255,250,243,.86); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,.5); border-radius: 22px; box-shadow: var(--shadow);
+  }
+  .mic-toggle {
+    width: 52px; height: 52px; border-radius: 50%; flex: none; cursor: pointer;
+    border: 1px solid var(--line); background: var(--paper); color: var(--teal);
+    font-size: 1.35rem; display: grid; place-items: center;
+    transition: background .15s ease, color .15s ease, transform .15s ease;
+  }
+  .mic-toggle:hover { transform: translateY(-1px); }
+  .mic-toggle.active {
+    background: linear-gradient(135deg, var(--teal), #2b8f92);
+    color: #fffaf4; border-color: transparent;
+  }
+  .mic-toggle:disabled { opacity: .55; cursor: wait; transform: none; }
+  .voice-copy { min-width: 0; }
+  .voice-status { display: block; color: var(--teal); font-weight: 700; font-size: .9rem; }
+  .voice-status[data-state="error"] { color: var(--accent); }
+  .voice-transcript {
+    display: block; min-height: 1.4em; margin-top: 3px; color: var(--muted);
+    font-size: .88rem; overflow-wrap: anywhere;
+  }
+
   .chat {
     flex: 1; overflow-y: auto; padding: 6px 4px 4px;
     display: flex; flex-direction: column; gap: 14px;
@@ -144,6 +171,19 @@
   body.big .quick button { font-size: 1rem; padding: 9px 15px; }
   body.big .meta, body.big .pref-note { font-size: .96rem; }
   body.big .status-pill, body.big .a11y-toggle { font-size: .92rem; }
+  body.big .voice-status { font-size: 1.05rem; }
+  body.big .voice-transcript { font-size: 1rem; }
+  body.big .mic-toggle { width: 60px; height: 60px; font-size: 1.55rem; }
+
+  /* 窄屏适配 */
+  @media (max-width: 520px) {
+    body { padding: 12px 8px; }
+    .app { height: calc(100vh - 24px); }
+    header { padding: 12px; }
+    .status-pill { font-size: .72rem; padding: 6px 8px; }
+    .bubble { max-width: 84%; }
+    .send { padding: 0 16px; }
+  }
 </style>
 </head>
 <body>
@@ -160,6 +200,15 @@
       <div class="status-pill" id="statusPill" role="status" aria-live="polite">状态:还没取餐</div>
     </div>
   </header>
+
+  <section class="voice-panel" aria-label="语音输入">
+    <button class="mic-toggle" id="micToggle" type="button"
+            aria-label="开启或关闭麦克风" aria-pressed="false" title="开启或关闭麦克风">&#127908;</button>
+    <div class="voice-copy">
+      <span class="voice-status" id="voiceStatus" data-state="idle" role="status" aria-live="polite">麦克风已关闭</span>
+      <output class="voice-transcript" id="voiceTranscript">点亮麦克风后,说“小瓜小瓜”唤醒,再说出你的需求</output>
+    </div>
+  </section>
 
   <div class="chat" id="chat" role="log" aria-live="polite" aria-relevant="additions" aria-label="与小瓜的对话记录">
     <div class="row bot">
@@ -179,7 +228,7 @@
     <button data-t="今天天气真好啊">闲聊一句</button>
     <button data-t="别停">别停</button>
   </div>
-  <p class="hint">意图识别与对话由两个 LLM 分别处理;命令会触发机械臂动作(当前为演示)。</p>
+  <p class="hint">说“小瓜小瓜”唤醒语音,或直接打字;意图识别与对话由两个 LLM 分别处理,命令会触发机械臂动作(当前为演示)。</p>
 </div>
 
 <script>
@@ -242,6 +291,14 @@ function addPrefNote(prefs) {
   chat.scrollTop = chat.scrollHeight;
 }
 
+// 统一渲染一条 agent 结果(文本聊天与语音链路共用),data 为后端 process() 的返回。
+function renderAgentResult(data) {
+  addMeta(data);
+  addBubble(data.reply || '好的。', 'bot');
+  if (Array.isArray(data.prefSaved) && data.prefSaved.length) addPrefNote(data.prefSaved);
+  if (data.feedingState) statusPill.textContent = '状态:' + data.feedingState;
+}
+
 async function send(text) {
   if (!text.trim()) return;
   addBubble(text, 'user');
@@ -268,10 +325,7 @@ async function send(text) {
     if (data.error) {
       addBubble('(出了点小问题:' + data.error + ')', 'bot');
     } else {
-      addMeta(data);
-      addBubble(data.reply, 'bot');
-      if (Array.isArray(data.prefSaved) && data.prefSaved.length) addPrefNote(data.prefSaved);
-      if (data.feedingState) statusPill.textContent = '状态:' + data.feedingState;
+      renderAgentResult(data);
     }
   } catch (e) {
     typing.remove();
@@ -300,6 +354,20 @@ document.getElementById('quick').addEventListener('click', e => {
   if (e.target.dataset.t) send(e.target.dataset.t);
 });
 
+// 语音链路:语音客户端(voice-client.js)在识别到最终文本、以及后端 agent 结果就绪时,
+// 分别派发 hey-rice-final-transcript / hey-rice-agent-result 事件,这里把它们渲染进同一个对话流。
+window.addEventListener('hey-rice-final-transcript', event => {
+  addBubble(event.detail.text, 'user');
+});
+window.addEventListener('hey-rice-agent-result', event => {
+  const data = event.detail.result;
+  if (!data || data.error) {
+    addBubble('(' + ((data && data.error) || 'Agent 处理失败') + ')', 'bot');
+    return;
+  }
+  renderAgentResult(data);
+});
+
 // 适老化 · 大字体模式:切换 body.big,并记住用户的选择。
 const fontToggle = document.getElementById('fontToggle');
 function applyBigFont(on) {
@@ -317,5 +385,6 @@ fontToggle.addEventListener('click', () => {
 
 input.focus();
 </script>
+<script src="/static/voice-client.js"></script>
 </body>
 </html>

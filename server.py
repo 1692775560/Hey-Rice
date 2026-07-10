@@ -13,20 +13,25 @@
   python server.py            # 默认 http://127.0.0.1:8000
 """
 from __future__ import annotations
+import asyncio
 import json
 import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 import config
 from actions import FeedingState, run_intent
 from intent import recognize
 from chat_agent import reply
 from preferences import PreferenceMemory
+from voice_config import VoiceConfig
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOST = os.environ.get("MEALMATE_HOST", "127.0.0.1")
 PORT = int(os.environ.get("MEALMATE_PORT", "8000"))
+STATIC_DIR = Path(HERE) / "static"
+VOICE_CONFIG = VoiceConfig.from_env()
 
 # 命令确认话术(固定模板,不交给自由对话 LLM)。key 是代码解析出的实际动作。
 COMMAND_FEEDBACK = {
@@ -39,6 +44,19 @@ COMMAND_FEEDBACK = {
 STATE = FeedingState()
 # 偏好记忆:对话(TALK)里学到的患者偏好,一顿饭结束时沉淀落盘
 PREF = PreferenceMemory()
+_VOICE_STARTED = False
+
+
+def resolve_static_asset(request_path: str):
+    """Resolve the two public voice assets without accepting arbitrary paths."""
+    assets = {
+        "/static/voice-client.js": (STATIC_DIR / "voice-client.js", "text/javascript; charset=utf-8"),
+        "/static/pcm-worklet.js": (STATIC_DIR / "pcm-worklet.js", "text/javascript; charset=utf-8"),
+    }
+    asset = assets.get(request_path)
+    if asset is None or not asset[0].is_file():
+        return None
+    return asset
 
 
 def process(text: str) -> dict:
@@ -73,6 +91,49 @@ def process(text: str) -> dict:
     return resp
 
 
+def _process_voice_text(text: str) -> dict:
+    if not config.API_KEY:
+        return {"error": "MEALMATE_API_KEY is not configured"}
+    return process(text)
+
+
+def _run_voice_gateway() -> None:
+    from voice_gateway import VoiceGateway
+
+    try:
+        asyncio.run(VoiceGateway(VOICE_CONFIG).serve_forever())
+    except Exception as exc:  # noqa: BLE001
+        print(f"[voice] 语音网关停止: {type(exc).__name__}")
+
+
+def _run_embedded_agent() -> None:
+    from agent_ws_client import AgentWsClient
+
+    host = VOICE_CONFIG.websocket_host
+    if host in {"0.0.0.0", "::"}:
+        host = "127.0.0.1"
+    url = f"ws://{host}:{VOICE_CONFIG.websocket_port}/ws/agent"
+    asyncio.run(AgentWsClient(url, _process_voice_text).run_forever())
+
+
+def start_voice_services() -> None:
+    global _VOICE_STARTED
+    if _VOICE_STARTED:
+        return
+    _VOICE_STARTED = True
+    threading.Thread(
+        target=_run_voice_gateway,
+        name="hey-rice-voice-gateway",
+        daemon=True,
+    ).start()
+    if VOICE_CONFIG.embedded_agent:
+        threading.Thread(
+            target=_run_embedded_agent,
+            name="hey-rice-agent-ws-client",
+            daemon=True,
+        ).start()
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send_json(self, obj, code=200):
         body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
@@ -98,8 +159,21 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ("/", "/index.html"):
             self._send_file(os.path.join(HERE, "index.html"), "text/html; charset=utf-8")
+        elif self.path == "/api/voice-config":
+            missing = VOICE_CONFIG.missing_requirements()
+            self._send_json({
+                "enabled": VOICE_CONFIG.voice_enabled,
+                "ready": not missing,
+                "missing": missing,
+                "port": VOICE_CONFIG.websocket_port,
+                "wakeWord": VOICE_CONFIG.wake_word,
+            })
         else:
-            self.send_error(404, "Not Found")
+            asset = resolve_static_asset(self.path)
+            if asset is None:
+                self.send_error(404, "Not Found")
+            else:
+                self._send_file(str(asset[0]), asset[1])
 
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
@@ -149,6 +223,17 @@ def main():
     if not config.API_KEY:
         print("  ⚠️  尚未设置 MEALMATE_API_KEY —— 页面可打开,但发消息会提示配置密钥。")
         print("      设置方法:  export MEALMATE_API_KEY=你的密钥")
+    if VOICE_CONFIG.voice_enabled:
+        start_voice_services()
+        print(
+            f"  语音网关: ws://{VOICE_CONFIG.websocket_host}:"
+            f"{VOICE_CONFIG.websocket_port}/ws/voice"
+        )
+        missing = VOICE_CONFIG.missing_requirements()
+        if missing:
+            print("  语音待配置: " + ", ".join(missing))
+    else:
+        print("  语音网关: 已通过 MEALMATE_VOICE_ENABLED=0 关闭")
     print(f"  打开浏览器访问:  http://{HOST}:{PORT}")
     print("=" * 52)
     try:
