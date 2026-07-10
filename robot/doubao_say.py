@@ -90,6 +90,8 @@ def _resample(pcm, src, dst):
 
 
 def synth(text, speaker="zh_female_xiaohe_jupiter_bigtts", out_rate=DEVICE_RATE, timeout=15):
+    if not APP_ID or not ACCESS_TOKEN:
+        raise RuntimeError("缺少 DOUBAO_APP_ID / DOUBAO_ACCESS_TOKEN(请检查 robot.env)")
     ws = websocket.create_connection(API_URL, header={
         "X-Api-App-ID": APP_ID, "X-Api-Access-Key": ACCESS_TOKEN,
         "X-Api-Resource-Id": RESOURCE_ID, "X-Api-App-Key": APP_KEY,

@@ -58,6 +58,8 @@ def say():
     speaker = data.get("speaker") or DEFAULT_SPEAKER
     if not text:
         return jsonify(error="empty text"), 400
+    if len(text) > 500:          # 一句回复不该这么长;截断防滥用/超长合成
+        text = text[:500]
     try:
         pcm = doubao_say.synth(text, speaker=speaker)   # 网络合成放锁外
     except Exception as e:  # noqa: BLE001
