@@ -17,3 +17,7 @@ numpy>=1.26,<3
 sherpa-onnx>=1.10.30,<2
 volcengine-audio==0.2.4
 websockets>=15,<16
+
+# ---- 机器人语音输出依赖(可选;配了 HEYRICE_ROBOT_TTS_URL 才需要)----
+# 另需系统安装 ffmpeg。需 Python 3.9+(edge-tts 7.x 的令牌算法要求较新环境)。
+edge-tts>=7,<8

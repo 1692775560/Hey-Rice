@@ -26,6 +26,7 @@ from intent import recognize
 from chat_agent import reply
 from preferences import PreferenceMemory
 from voice_config import VoiceConfig
+import robot_tts
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOST = os.environ.get("MEALMATE_HOST", "127.0.0.1")
@@ -87,6 +88,9 @@ def process(text: str) -> dict:
         resp["reply"] = reply(text, PREF.summary_for_prompt())
         resp["action"] = None
         threading.Thread(target=PREF.observe, args=(text,), daemon=True).start()
+
+    # 让机器人把这句回复用语音念出来(仅当 HEYRICE_ROBOT_TTS_URL 配置;后台异步,不阻塞)
+    robot_tts.speak_async(resp.get("reply"))
 
     return resp
 
