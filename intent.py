@@ -135,11 +135,76 @@ def _contain(raw: dict) -> dict:
     return {"type": t, "intent": intent, "confidence": conf, "reason": reason}
 
 
+def _local_fast_path(utterance: str, state: FeedingState) -> dict | None:
+    """明显命令先走本地规则,把最常见演示话术变成秒回。"""
+    text = re.sub(r"\s+", "", utterance)
+    if not text:
+        return None
+
+    stop_patterns = (
+        "不吃了",
+        "够了",
+        "别喂了",
+        "先停下",
+        "停一下",
+        "我不想吃了",
+        "吃饱了",
+        "先不吃了",
+    )
+    if any(p in text for p in stop_patterns):
+        return {
+            "type": "COMMAND",
+            "intent": "STOP_FEED",
+            "confidence": 0.99,
+            "reason": "本地规则命中明确停止进食表达",
+        }
+
+    if "别停" in text:
+        return {
+            "type": "COMMAND",
+            "intent": "FEED",
+            "confidence": 0.95,
+            "reason": "本地规则识别为不要停,继续喂饭",
+        }
+
+    feed_patterns = (
+        "喂我吃饭",
+        "喂我",
+        "开始吃",
+        "来一口",
+        "再来一口",
+        "接着吃",
+        "继续吃",
+        "吃饭吧",
+    )
+    if any(p in text for p in feed_patterns):
+        return {
+            "type": "COMMAND",
+            "intent": "FEED",
+            "confidence": 0.98,
+            "reason": "本地规则命中明确喂饭请求",
+        }
+
+    if text in {"继续", "继续吧", "再来", "接着"} and (state.feeding or state.food_acquired):
+        return {
+            "type": "COMMAND",
+            "intent": "FEED",
+            "confidence": 0.92,
+            "reason": "结合当前喂饭状态,本地规则识别为继续喂饭",
+        }
+
+    return None
+
+
 def recognize(utterance: str, state: FeedingState) -> dict:
     """识别一句话的意图。返回收容后的 dict。
 
     出参:{type, intent, confidence, reason}
     """
+    local = _local_fast_path(utterance, state)
+    if local is not None:
+        return local
+
     user = (
         f"【当前喂饭状态】{state.describe()}\n"
         f"【患者说的话】{utterance}"

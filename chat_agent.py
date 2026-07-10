@@ -5,6 +5,7 @@
 它不产生任何命令、不控制机械臂,只说话。
 """
 from __future__ import annotations
+import re
 
 import config
 from llm import chat
@@ -36,6 +37,24 @@ XIAOGUA_PERSONA = """\
 - 不要输出任何 JSON、动作指令、括号说明。
 """
 
+_GREETING_RE = re.compile(r"^(你好|您好|嗨|哈喽|在吗|早上好|中午好|晚上好)[呀啊哦呢嘛吗~！!，。 ]*$")
+_THANKS_RE = re.compile(r"(谢谢|辛苦了|麻烦你了)")
+_HUNGRY_RE = re.compile(r"(我饿了|饿了|有点饿)")
+
+
+def _quick_reply(utterance: str) -> str | None:
+    """对最常见的寒暄和演示话术直接本地回复,避免每次都走远端。"""
+    text = utterance.strip()
+    if not text:
+        return None
+    if _GREETING_RE.match(text):
+        return "你好呀,我是小瓜。想吃饭了就跟我说,我们慢慢来。"
+    if _THANKS_RE.search(text):
+        return "不客气呀,我陪着你,我们慢慢来。"
+    if _HUNGRY_RE.search(text):
+        return "饿了好呀,那我们就慢慢开始吃,不着急。"
+    return None
+
 
 def reply(utterance: str, recent_context: str = "") -> str:
     """用小瓜人设生成一句温柔回话。
@@ -43,6 +62,10 @@ def reply(utterance: str, recent_context: str = "") -> str:
     utterance: 患者说的话
     recent_context: 可选,最近几轮对话摘要(先留接口,主循环可暂不传)
     """
+    fast = _quick_reply(utterance)
+    if fast is not None:
+        return fast
+
     user = utterance if not recent_context else f"{recent_context}\n患者刚说:{utterance}"
     try:
         text = chat(

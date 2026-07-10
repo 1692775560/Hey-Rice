@@ -144,6 +144,7 @@ const chat = document.getElementById('chat');
 const input = document.getElementById('input');
 const sendBtn = document.getElementById('send');
 const statusPill = document.getElementById('statusPill');
+const FETCH_TIMEOUT_MS = 18000;
 
 function addBubble(text, who) {
   const row = document.createElement('div');
@@ -183,11 +184,15 @@ async function send(text) {
   typing.querySelector('.bubble').classList.add('typing');
 
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ text }),
+      signal: controller.signal
     });
+    clearTimeout(timer);
     const data = await res.json();
     typing.remove();
 
@@ -200,7 +205,11 @@ async function send(text) {
     }
   } catch (e) {
     typing.remove();
-    addBubble('(连不上小瓜的后台,请确认服务已启动)', 'bot');
+    if (e.name === 'AbortError') {
+      addBubble('我这会儿网络有点慢,你稍等一下,或者再发一遍给我。', 'bot');
+    } else {
+      addBubble('(连不上小瓜的后台,请确认服务已启动)', 'bot');
+    }
   } finally {
     sendBtn.disabled = false;
     input.focus();
