@@ -185,7 +185,7 @@ def _local_fast_path(utterance: str, state: FeedingState) -> dict | None:
             "reason": "本地规则命中明确喂饭请求",
         }
 
-    if text in {"继续", "继续吧", "再来", "接着"} and (state.feeding or state.food_acquired):
+    if text in {"继续", "继续吧", "再来", "接着"} and (state.meal_active or state.food_acquired):
         return {
             "type": "COMMAND",
             "intent": "FEED",

@@ -128,8 +128,10 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:  # noqa: BLE001
                 self._send_json({"error": str(e)}, 500)
         elif self.path == "/api/reset":
+            # 重置这顿饭的完整状态:meal_active 决定 FIRST/CONTINUE,必须一并归零,
+            # 否则下次喂饭不会从"取餐"开始。food_acquired 是动作层内部标记,同步清空。
+            STATE.meal_active = False
             STATE.food_acquired = False
-            STATE.feeding = False
             self._send_json({"ok": True, "feedingState": STATE.describe()})
         else:
             self.send_error(404, "Not Found")
