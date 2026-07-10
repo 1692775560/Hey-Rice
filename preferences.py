@@ -11,6 +11,7 @@
 from __future__ import annotations
 import json
 import os
+import threading
 import time
 
 import config
@@ -47,6 +48,9 @@ EXTRACT_PROMPT = """\
 
 class PreferenceMemory:
     def __init__(self):
+        # observe() 跑在后台线程,finalize_meal()/summary 在请求线程,
+        # 共享 pending/saved,用锁保护免于竞态。
+        self._lock = threading.Lock()
         # 本顿饭累积的偏好(结束时落盘)
         self.pending: list[dict] = []
         # 已落盘的历史偏好(启动时加载)
@@ -70,33 +74,37 @@ class PreferenceMemory:
             return []
 
         fresh = [p for p in prefs if isinstance(p, dict) and p.get("value")]
-        self.pending.extend(fresh)
+        with self._lock:           # LLM 调用在锁外,只有列表写入进锁
+            self.pending.extend(fresh)
         return fresh
 
     # ---- 一顿饭结束时落盘 ----
     def finalize_meal(self) -> list[dict]:
         """把本顿累积的偏好去重后落盘。返回本次落盘的偏好。"""
-        if not self.pending:
-            return []
-        # 去重(按 category+value)
-        seen = {(p["category"], p["value"]) for p in self.saved}
-        newly = []
-        for p in self.pending:
-            key = (p.get("category"), p.get("value"))
-            if key not in seen:
-                seen.add(key)
-                record = {**p, "ts": int(time.time())}
-                self.saved.append(record)
-                newly.append(record)
-        self.pending = []
-        self._persist()
-        return newly
+        with self._lock:
+            if not self.pending:
+                return []
+            # 去重(按 category+value)
+            seen = {(p["category"], p["value"]) for p in self.saved}
+            newly = []
+            for p in self.pending:
+                key = (p.get("category"), p.get("value"))
+                if key not in seen:
+                    seen.add(key)
+                    record = {**p, "ts": int(time.time())}
+                    self.saved.append(record)
+                    newly.append(record)
+            self.pending = []
+            self._persist()
+            return newly
 
     # ---- 给对话 LLM 的偏好摘要(让小瓜记得患者喜好)----
     def summary_for_prompt(self) -> str:
-        if not self.saved:
+        with self._lock:
+            recent = list(self.saved[-12:])
+        if not recent:
             return ""
-        lines = [f"- [{p['category']}] {p['value']}" for p in self.saved[-12:]]
+        lines = [f"- [{p['category']}] {p['value']}" for p in recent]
         return "已知患者的吃饭偏好(供参考,自然体现,别生硬复述):\n" + "\n".join(lines)
 
     # ---- 持久化 ----
