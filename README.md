@@ -1,6 +1,6 @@
 # 小瓜 · 喂饭陪伴 Agent(代码骨架)
 
-用 Claude Opus 做意图识别,区分「命令」和「对话」:
+用中转的 Claude 模型(默认快模型 Haiku,可切 Opus,见 `config.py` / `.env.example`)做意图识别,区分「命令」和「对话」:
 - **命令** → 调用对应的机械臂动作(现在是 mock,等真实动作 API 直接替换)
 - **对话** → 用「小瓜」人设(温柔家人感)温柔回话
 
@@ -23,6 +23,13 @@
 # 1. 设置密钥(从环境变量读,不要写进代码)
 export MEALMATE_API_KEY=你的密钥
 # 可选:export MEALMATE_API_BASE=https://api.inferera.com/v1
+```
+
+**最简方式 · 一键脚本**
+```bash
+./run.sh          # 启动 Web 服务(默认 http://127.0.0.1:8000)
+./run.sh cli      # 命令行交互模式
+./run.sh cli "喂我吃饭吧"   # 命令行单句模式
 ```
 
 **方式 A · 前台聊天页面(推荐,可视化对话)**
