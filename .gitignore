@@ -8,3 +8,7 @@ preferences_store.json
 .venv/
 models/
 .gstack/
+
+# 机器人侧密钥(不入库)
+robot.env
+robot/robot.env
