@@ -14,12 +14,21 @@ set -euo pipefail
 # 切到脚本所在目录,保证相对路径(index.html 等)可用。
 cd "$(dirname "$0")"
 
-# 选一个可用的 Python 解释器:优先 $PYTHON,再 python3,最后 python。
-PY="${PYTHON:-python3}"
-if ! command -v "$PY" >/dev/null 2>&1; then
-  PY="python"
+# 若存在 .env 则自动载入(密钥/模型/语音配置);.env 已被 gitignore。
+if [ -f .env ]; then
+  set -a; . ./.env; set +a
 fi
-if ! command -v "$PY" >/dev/null 2>&1; then
+
+# 选 Python 解释器:优先项目 venv(带语音/依赖),再 $PYTHON,再 python3,最后 python。
+if [ -x ./.venv/bin/python ]; then
+  PY="./.venv/bin/python"
+else
+  PY="${PYTHON:-python3}"
+  if ! command -v "$PY" >/dev/null 2>&1; then
+    PY="python"
+  fi
+fi
+if [ "$PY" != "./.venv/bin/python" ] && ! command -v "$PY" >/dev/null 2>&1; then
   echo "错误: 未找到 Python 解释器,请先安装 Python 3.9+。" >&2
   exit 1
 fi
