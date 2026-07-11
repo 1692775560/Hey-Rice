@@ -34,7 +34,6 @@ class VoiceConfig:
     no_speech_ms: int
     max_duration_ms: int
     speech_threshold: float
-    conversation_timeout_ms: int
     embedded_agent: bool
 
     @classmethod
@@ -64,9 +63,6 @@ class VoiceConfig:
             speech_threshold=float(
                 os.environ.get("MEALMATE_SPEECH_THRESHOLD", "500")
             ),
-            conversation_timeout_ms=int(
-                os.environ.get("MEALMATE_CONVERSATION_MS", "600000")  # 10 分钟无交互则结束会话
-            ),
             embedded_agent=_bool_env("MEALMATE_EMBED_AGENT", True),
         )
 
@@ -78,6 +74,5 @@ class VoiceConfig:
             missing.append("DOUBAO_APP_ID")
         if not self.access_token:
             missing.append("DOUBAO_ACCESS_TOKEN")
-        if not self.kws_model_dir.is_dir():
-            missing.append("KWS_MODEL_DIR")
+        # 按键对讲不使用本地唤醒模型,故不再要求 KWS_MODEL_DIR。
         return missing

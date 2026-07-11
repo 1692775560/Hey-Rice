@@ -16,13 +16,13 @@ class VoiceConfigTests(unittest.TestCase):
         self.assertTrue(config.voice_enabled)
 
     def test_reports_missing_runtime_requirements(self):
-        # 显式指向不存在的模型目录,使断言不依赖本机是否已下载唤醒模型。
-        with patch.dict(os.environ, {"KWS_MODEL_DIR": "/nonexistent/kws-model"}, clear=True):
+        # 按键对讲只需豆包凭证,不再要求本地唤醒模型。
+        with patch.dict(os.environ, {}, clear=True):
             config = VoiceConfig.from_env()
 
         self.assertEqual(
             config.missing_requirements(),
-            ["DOUBAO_APP_ID", "DOUBAO_ACCESS_TOKEN", "KWS_MODEL_DIR"],
+            ["DOUBAO_APP_ID", "DOUBAO_ACCESS_TOKEN"],
         )
 
     def test_secret_values_are_hidden_from_repr(self):
