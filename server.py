@@ -27,6 +27,7 @@ from chat_agent import reply
 from preferences import PreferenceMemory
 from voice_config import VoiceConfig
 import robot_tts
+import robot_arm
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOST = os.environ.get("MEALMATE_HOST", "127.0.0.1")
@@ -89,10 +90,23 @@ def process(text: str) -> dict:
         resp["action"] = None
         threading.Thread(target=PREF.observe, args=(text,), daemon=True).start()
 
-    # 让机器人把这句回复用语音念出来(仅当 HEYRICE_ROBOT_TTS_URL 配置;后台异步,不阻塞)
-    robot_tts.speak_async(resp.get("reply"))
+    # 机器人语音输出;若是送餐命令,先念完回复再动机械臂送餐(保证"先说后喂")。
+    _speak_and_maybe_feed(resp)
 
     return resp
+
+
+def _speak_and_maybe_feed(resp: dict) -> None:
+    """让机器人念回复;送餐命令则念完再触发机械臂轨迹(顺序:先说后喂)。"""
+    reply_text = resp.get("reply")
+    steps = (resp.get("action") or {}).get("steps") or []
+    if "deliver_food" in steps and robot_arm.enabled():
+        def _run():
+            robot_tts.speak_blocking(reply_text)      # 阻塞到机器人念完
+            robot_arm.trigger_blocking("deliver_food")  # 再送餐
+        threading.Thread(target=_run, daemon=True, name="speak-then-feed").start()
+    else:
+        robot_tts.speak_async(reply_text)
 
 
 def _process_voice_text(text: str) -> dict:

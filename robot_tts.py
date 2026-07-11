@@ -51,3 +51,11 @@ def speak_async(text: str) -> None:
     if not text or not ROBOT_TTS_URL:
         return
     threading.Thread(target=_worker, args=(text,), daemon=True, name="robot-tts").start()
+
+
+def speak_blocking(text: str) -> None:
+    """同步念出一句回复(阻塞到机器人播完;供"先念后送餐"顺序编排)。"""
+    text = (text or "").strip()
+    if not text or not ROBOT_TTS_URL:
+        return
+    _worker(text)
