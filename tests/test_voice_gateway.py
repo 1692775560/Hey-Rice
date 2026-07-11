@@ -27,9 +27,8 @@ def test_config():
         asr_endpoint="wss://example.test/asr",
         silence_ms=900,
         no_speech_ms=4000,
-        max_duration_ms=12000,
+        max_duration_ms=1000,
         speech_threshold=500,
-        conversation_timeout_ms=600000,
         embedded_agent=True,
     )
 
@@ -65,20 +64,6 @@ class ClosedSocket(FakeSocket):
         raise RuntimeError("socket is closed")
 
 
-class FakeWakeDetector:
-    def __init__(self, results):
-        self.results = list(results)
-        self.reset_count = 0
-        self.received = []
-
-    def accept(self, frame):
-        self.received.append(frame)
-        return self.results.pop(0) if self.results else False
-
-    def reset(self):
-        self.reset_count += 1
-
-
 class FakeAsr:
     def __init__(self, final_text="我想吃饭", start_error=None):
         self.final_text = final_text
@@ -108,28 +93,9 @@ class FakeAgentHub:
     def __init__(self):
         self.events = []
 
-    async def publish(self, event, session):
-        self.events.append((event, session))
+    async def publish(self, event, browser):
+        self.events.append((event, browser))
         return True
-
-
-class FakeSession:
-    """AgentHub 测试用:记录并把 agent 结果转发给内部浏览器 socket。"""
-    def __init__(self, browser):
-        self.browser = browser
-        self.delivered = []
-
-    async def deliver_agent_result(self, request_id, result):
-        self.delivered.append((request_id, result))
-        try:
-            await self.browser.send(
-                json.dumps(
-                    {"type": "agent_result", "requestId": request_id, "result": result},
-                    ensure_ascii=False,
-                )
-            )
-        except Exception:
-            return
 
 
 def decoded_messages(socket):
@@ -137,164 +103,132 @@ def decoded_messages(socket):
 
 
 class VoiceSessionTests(unittest.IsolatedAsyncioTestCase):
-    def make_session(self, wake_results, asr):
+    def make_session(self, asr):
         browser = FakeSocket()
-        wake = FakeWakeDetector(wake_results)
         hub = FakeAgentHub()
-        config = replace(
-            test_config(),
-            silence_ms=100,
-            no_speech_ms=300,
-            max_duration_ms=1000,
-        )
         session = VoiceSession(
             browser,
-            config,
-            wake_detector=wake,
+            test_config(),
             asr_factory=lambda: asr,
             agent_hub=hub,
         )
-        return session, browser, wake, hub
+        return session, browser, hub
 
-    async def test_audio_before_wake_never_starts_asr(self):
+    async def test_start_puts_session_ready(self):
+        session, _, _ = self.make_session(FakeAsr())
+        await session.handle('{"type":"start","sampleRate":16000}')
+        self.assertEqual(session.state, SessionState.READY)
+
+    async def test_audio_before_press_is_ignored(self):
         asr = FakeAsr()
-        session, _, wake, hub = self.make_session([False], asr)
+        session, _, hub = self.make_session(asr)
         await session.handle('{"type":"start","sampleRate":16000}')
 
-        await session.handle(pcm(1000))
+        await session.handle(pcm(2000))
 
         self.assertFalse(asr.started)
-        self.assertEqual(len(wake.received), 1)
         self.assertEqual(hub.events, [])
+        self.assertEqual(session.state, SessionState.READY)
 
-    async def test_wake_frame_is_not_uploaded_to_cloud(self):
+    async def test_speak_start_begins_recording(self):
         asr = FakeAsr()
-        session, _, _, _ = self.make_session([True], asr)
+        session, _, _ = self.make_session(asr)
         await session.handle('{"type":"start","sampleRate":16000}')
-        wake_frame = pcm(2000)
 
-        await session.handle(wake_frame)
+        await session.handle('{"type":"speak_start"}')
 
         self.assertTrue(asr.started)
-        self.assertEqual(asr.frames, [])
         self.assertEqual(session.state, SessionState.LISTENING)
 
-    async def test_silence_publishes_one_normalized_final_text(self):
+    async def test_press_talk_release_publishes_one_transcript(self):
         asr = FakeAsr("小瓜小瓜，我想吃饭")
-        session, browser, wake, hub = self.make_session([True], asr)
+        session, browser, hub = self.make_session(asr)
         await session.handle('{"type":"start","sampleRate":16000}')
+        await session.handle('{"type":"speak_start"}')
+        await session.handle(pcm(2000))
         await session.handle(pcm(2000))
 
-        await session.handle(pcm(2000))
-        await session.handle(pcm(0))
+        await session.handle('{"type":"speak_end"}')
 
         self.assertEqual(len(hub.events), 1, decoded_messages(browser))
         event = hub.events[0][0]
         self.assertEqual(event["type"], "final_transcript")
-        self.assertEqual(event["text"], "我想吃饭")
+        self.assertEqual(event["text"], "我想吃饭")   # 唤醒词若被识别到会被剥掉
         self.assertEqual(asr.finish_count, 1)
         self.assertTrue(asr.closed)
-        # 唤醒一次后进入持续对话:说完一句不再要求唤醒,停在 CONVERSING。
-        self.assertEqual(wake.reset_count, 1)
-        self.assertEqual(session.state, SessionState.CONVERSING)
-        self.assertTrue(session.conversing)
-        browser_events = decoded_messages(browser)
-        self.assertEqual(
-            len([item for item in browser_events if item["type"] == "final_transcript"]),
-            1,
-        )
+        self.assertEqual(len(asr.frames), 2)
+        self.assertEqual(session.state, SessionState.READY)
 
-    async def test_asr_start_error_resets_without_publishing(self):
+    async def test_speak_start_asr_error_returns_ready(self):
         asr = FakeAsr(start_error=RuntimeError("network detail"))
-        session, browser, _, hub = self.make_session([True], asr)
+        session, browser, hub = self.make_session(asr)
         await session.handle('{"type":"start","sampleRate":16000}')
 
-        await session.handle(pcm(2000))
+        await session.handle('{"type":"speak_start"}')
 
-        self.assertEqual(session.state, SessionState.WAITING_WAKE)
+        self.assertEqual(session.state, SessionState.READY)
         self.assertEqual(hub.events, [])
         errors = [m for m in decoded_messages(browser) if m["type"] == "error"]
         self.assertEqual(errors[0]["code"], "asr_failed")
         self.assertNotIn("network detail", errors[0]["message"])
 
+    async def test_empty_transcript_returns_ready_without_publish(self):
+        asr = FakeAsr("")
+        session, browser, hub = self.make_session(asr)
+        await session.handle('{"type":"start","sampleRate":16000}')
+        await session.handle('{"type":"speak_start"}')
+        await session.handle(pcm(2000))
+
+        await session.handle('{"type":"speak_end"}')
+
+        self.assertEqual(hub.events, [])
+        self.assertEqual(session.state, SessionState.READY)
+
     async def test_stop_closes_active_asr(self):
         asr = FakeAsr()
-        session, _, _, _ = self.make_session([True], asr)
+        session, _, _ = self.make_session(asr)
         await session.handle('{"type":"start","sampleRate":16000}')
-        await session.handle(pcm(2000))
+        await session.handle('{"type":"speak_start"}')
 
         await session.handle('{"type":"stop"}')
 
         self.assertTrue(asr.closed)
         self.assertEqual(session.state, SessionState.IDLE)
 
+    async def test_second_press_records_again_without_extra_steps(self):
+        asrs = []
+
+        def make_asr():
+            a = FakeAsr("再来一口")
+            asrs.append(a)
+            return a
+
+        browser = FakeSocket()
+        hub = FakeAgentHub()
+        session = VoiceSession(browser, test_config(), asr_factory=make_asr, agent_hub=hub)
+        await session.handle('{"type":"start","sampleRate":16000}')
+
+        for _ in range(2):
+            await session.handle('{"type":"speak_start"}')
+            await session.handle(pcm(2000))
+            await session.handle('{"type":"speak_end"}')
+
+        self.assertEqual(len(hub.events), 2)
+        self.assertEqual(len(asrs), 2)
+        self.assertEqual(session.state, SessionState.READY)
+
     async def test_disconnect_cleans_up_without_writing_to_closed_socket(self):
         browser = DisconnectingSocket()
-        asr = FakeAsr()
-        wake = FakeWakeDetector([])
         session = VoiceSession(
             browser,
-            replace(test_config(), silence_ms=100),
-            wake_detector=wake,
-            asr_factory=lambda: asr,
+            test_config(),
+            asr_factory=lambda: FakeAsr(),
             agent_hub=FakeAgentHub(),
         )
 
         await session.run()
 
         self.assertEqual(session.state, SessionState.IDLE)
-
-    async def test_wake_once_then_second_utterance_needs_no_wake(self):
-        browser = FakeSocket()
-        wake = FakeWakeDetector([True])   # 只提供一次唤醒命中
-        hub = FakeAgentHub()
-        asrs = []
-
-        def make_asr():
-            a = FakeAsr("我想吃饭")
-            asrs.append(a)
-            return a
-
-        config = replace(
-            test_config(), silence_ms=100, no_speech_ms=300, max_duration_ms=1000
-        )
-        session = VoiceSession(
-            browser, config, wake_detector=wake, asr_factory=make_asr, agent_hub=hub
-        )
-        await session.handle('{"type":"start","sampleRate":16000}')
-
-        # 第一句:唤醒 → 说话 → 静音
-        await session.handle(pcm(2000))   # 唤醒命中 → LISTENING
-        await session.handle(pcm(2000))
-        await session.handle(pcm(0))      # 静音 → 收尾 → CONVERSING
-        self.assertEqual(session.state, SessionState.CONVERSING)
-
-        # 第二句:不喊唤醒,直接说
-        await session.handle(pcm(2000))   # CONVERSING 检测到说话 → 新 ASR → LISTENING
-        await session.handle(pcm(2000))
-        await session.handle(pcm(0))      # 静音 → 收尾
-
-        self.assertEqual(len(hub.events), 2)       # 两句都上报
-        self.assertEqual(len(wake.received), 1)    # 唤醒检测只在第一句用了一次
-        self.assertEqual(len(asrs), 2)             # 两句各开一次 ASR
-        self.assertEqual(session.state, SessionState.CONVERSING)
-
-    async def test_stop_feed_result_ends_conversation(self):
-        asr = FakeAsr("不吃了")
-        session, browser, _, hub = self.make_session([True], asr)
-        await session.handle('{"type":"start","sampleRate":16000}')
-        await session.handle(pcm(2000))   # 唤醒 → LISTENING
-        await session.handle(pcm(2000))
-        await session.handle(pcm(0))      # 收尾 → CONVERSING
-        self.assertTrue(session.conversing)
-
-        request_id = hub.events[0][0]["requestId"]
-        await session.deliver_agent_result(
-            request_id, {"reply": "好的", "intent": "STOP_FEED"}
-        )
-
-        self.assertFalse(session.conversing)
-        self.assertEqual(session.state, SessionState.WAITING_WAKE)
 
 
 class AgentHubTests(unittest.IsolatedAsyncioTestCase):
@@ -311,7 +245,7 @@ class AgentHubTests(unittest.IsolatedAsyncioTestCase):
             "timestamp": 1,
         }
 
-        delivered = await hub.publish(event, FakeSession(browser))
+        delivered = await hub.publish(event, browser)
         await hub.handle_message(
             agent,
             '{"type":"agent_result","requestId":"req-1","result":{"reply":"好"}}',
@@ -347,7 +281,7 @@ class AgentHubTests(unittest.IsolatedAsyncioTestCase):
     async def test_closed_browser_does_not_break_agent_result_handling(self):
         hub = AgentHub()
         agent = FakeSocket()
-        hub.pending["req-1"] = FakeSession(ClosedSocket())
+        hub.pending["req-1"] = ClosedSocket()
 
         await hub.handle_message(
             agent,
