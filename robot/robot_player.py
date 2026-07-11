@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
-"""机器人常驻语音服务(运行在 Galbot 机器人上)。
+"""机器人常驻服务(运行在 Galbot 机器人上)。
 
  /say  : 收 {"text","speaker"?} → 豆包 SayHello 逐字合成 → galbot 扬声器播放
  /play : 收裸 PCM(s16le/16000/mono) → 直接播放(备用)
+ /arm  : 收 {"action"} → 用同一台 robot 回放送餐轨迹(joint.json)
  /health
 
-依赖:flask、galbot_sdk(vendored,需 run_player.sh 设好环境)、同目录 doubao_say.py。
+依赖:flask、galbot_sdk(vendored,需 run_player.sh 设好环境)、同目录 doubao_say.py、
+     arm_action.py(回放 robo_arm/joint.json)。
 启动:见同目录 run_player.sh。
 """
 import os
@@ -22,7 +24,8 @@ CHUNK = 2560
 DEFAULT_SPEAKER = os.environ.get("ROBOT_TTS_SPEAKER", "zh_female_xiaohe_jupiter_bigtts")
 app = Flask(__name__)
 _robot = None
-_play_lock = threading.Lock()
+# 音频与机械臂共用同一台 robot;用一把锁串行化,避免并发访问同一实例。
+_robot_lock = threading.Lock()
 
 
 def get_robot():
@@ -38,7 +41,7 @@ def get_robot():
 
 
 def _play_pcm(pcm):
-    with _play_lock:
+    with _robot_lock:
         robot = get_robot()
         for i in range(0, len(pcm), CHUNK):
             robot.write_audio_stream_output(pcm[i:i + CHUNK], "speaker")
@@ -80,6 +83,25 @@ def play():
     _play_pcm(pcm)
     print(f"[player] played {len(pcm)} bytes", flush=True)
     return jsonify(ok=True, bytes=len(pcm))
+
+
+@app.route("/arm", methods=["POST"])
+def arm():
+    """回放送餐机械臂轨迹。后台线程执行(轨迹约数秒),与音频共用锁串行化。"""
+    data = request.get_json(silent=True) or {}
+    action = data.get("action", "deliver_food")
+
+    def _run():
+        with _robot_lock:
+            try:
+                import arm_action
+                arm_action.run_trajectory(get_robot())
+                print(f"[player] arm done ({action})", flush=True)
+            except Exception as e:  # noqa: BLE001
+                print(f"[player] arm 失败: {e}", flush=True)
+
+    threading.Thread(target=_run, name="arm", daemon=True).start()
+    return jsonify(ok=True, action=action)
 
 
 if __name__ == "__main__":
