@@ -209,6 +209,8 @@
       <p>陪你慢慢吃饭的伙伴 · 温柔家人感</p>
     </div>
     <div class="header-actions">
+      <button class="a11y-toggle" id="resetBtn" type="button"
+              aria-label="开始新的一餐,重置喂饭状态" title="重置喂饭状态,重新从取餐开始">新的一餐</button>
       <button class="a11y-toggle" id="fontToggle" type="button" aria-pressed="false"
               aria-label="切换大字体模式" title="放大文字,方便阅读">大字体</button>
       <div class="status-pill" id="statusPill" role="status" aria-live="polite">状态:还没取餐</div>
@@ -395,6 +397,27 @@ fontToggle.addEventListener('click', () => {
   const on = !document.body.classList.contains('big');
   applyBigFont(on);
   try { localStorage.setItem('xiaogua_big_font', on ? '1' : '0'); } catch (e) { /* 忽略持久化失败 */ }
+});
+
+// 「新的一餐」:重置后端喂饭状态,重新从取餐开始。
+const resetBtn = document.getElementById('resetBtn');
+resetBtn.addEventListener('click', async () => {
+  resetBtn.disabled = true;
+  try {
+    const res = await fetch('/api/reset', { method: 'POST' });
+    const data = await res.json();
+    if (data.feedingState) statusPill.textContent = '状态:' + data.feedingState;
+    const note = document.createElement('div');
+    note.className = 'pref-note';
+    note.textContent = '已开始新的一餐,咱们重新慢慢来。';
+    chat.appendChild(note);
+    chat.scrollTop = chat.scrollHeight;
+  } catch (e) {
+    addBubble('(重置没成功,请确认服务还开着)', 'bot');
+  } finally {
+    resetBtn.disabled = false;
+    input.focus();
+  }
 });
 
 input.focus();
