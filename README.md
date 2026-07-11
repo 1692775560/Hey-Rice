@@ -114,6 +114,11 @@ setsid bash ./run_player.sh > /tmp/robot_player.log 2>&1 < /dev/null &
   → 最终文本 → /ws/agent → server.process()（与打字同一套逻辑）
 ```
 
+**唤醒一次即进入持续对话**：说一次「小瓜小瓜」唤醒后，之后每句直接说、无需再喊唤醒词
+（静音期间用本地 VAD 等待，不占用云端 ASR 连接）。会话结束条件:
+- agent 判定为 `STOP_FEED`（用户说「不吃了」），或
+- 连续 `MEALMATE_CONVERSATION_MS`（默认 10 分钟）无有效交互（说话过程不计入）。
+
 浏览器连 `ws://<host>:8765/ws/voice`。服务默认内置一个 agent 客户端（`MEALMATE_EMBED_AGENT=1`），
 通过 `/ws/agent` 调用 `server.process(text)`。接第三方独立 agent 时设 `MEALMATE_EMBED_AGENT=0`，对方按
 `final_transcript` 收文本、按相同 `requestId` 回 `agent_result`。
@@ -141,6 +146,7 @@ agent 回复文本 → robot_tts.py POST /say
 | `MEALMATE_INTENT_MODEL` / `MEALMATE_CHAT_MODEL` | 意图 / 对话模型（如 `deepseek-chat`） |
 | `MEALMATE_SEND_TEMPERATURE` | 是否发送 temperature（DeepSeek 支持则设 `1`，意图拿到确定性 0） |
 | `MEALMATE_VOICE_ENABLED` | 语音输入开关（`0` 关闭） |
+| `MEALMATE_CONVERSATION_MS` | 语音会话空闲超时（毫秒，默认 600000＝10 分钟） |
 | `DOUBAO_APP_ID` / `DOUBAO_ACCESS_TOKEN` | 火山豆包凭证（ASR + 机器人 TTS 共用） |
 | `HEYRICE_ROBOT_TTS_URL` | 机器人播放服务地址，如 `http://172.16.20.160:5002/say`；不填则不启用机器人语音 |
 | `HEYRICE_ROBOT_TTS_SPEAKER` | 可选，指定豆包音色（留空用机器人端默认小何） |

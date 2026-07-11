@@ -222,7 +222,7 @@
             aria-label="开启或关闭麦克风" aria-pressed="false" title="开启或关闭麦克风">&#127908;</button>
     <div class="voice-copy">
       <span class="voice-status" id="voiceStatus" data-state="idle" role="status" aria-live="polite">麦克风已关闭</span>
-      <output class="voice-transcript" id="voiceTranscript">点亮麦克风后,说“小瓜小瓜”唤醒,再说出你的需求</output>
+      <output class="voice-transcript" id="voiceTranscript">点亮麦克风,说一次“小瓜小瓜”唤醒;之后直接说话即可,说“不吃了”就结束</output>
     </div>
   </section>
 
@@ -244,7 +244,7 @@
     <button data-t="今天天气真好啊">闲聊一句</button>
     <button data-t="别停">别停</button>
   </div>
-  <p class="hint">说“小瓜小瓜”唤醒语音,或直接打字;意图识别与对话由两个 LLM 分别处理,命令会触发机械臂动作(当前为演示)。</p>
+  <p class="hint">说一次“小瓜小瓜”唤醒后可连续对话(说“不吃了”或静置一会儿结束),也可直接打字;命令会触发机械臂动作(当前为演示)。</p>
 </div>
 
 <script>
