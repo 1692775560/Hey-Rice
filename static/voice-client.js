@@ -48,14 +48,16 @@ class VoiceClient {
     this.toggle.disabled = true;
     this.setStatus('正在准备麦克风…', 'connecting');
     try {
+      // 先在用户手势内请求麦克风权限(getUserMedia 需要用户手势,故放在最前)。
+      this.stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      });
+
       const response = await fetch('/api/voice-config');
       this.config = await response.json();
       if (!this.config.enabled) throw new Error('语音服务已关闭');
       if (!this.config.ready) throw new Error(`语音服务未配置：${this.config.missing.join(', ')}`);
 
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-      });
       this.context = new AudioContext({latencyHint: 'interactive'});
       await this.context.audioWorklet.addModule('/static/pcm-worklet.js');
       const source = this.context.createMediaStreamSource(this.stream);
@@ -74,11 +76,25 @@ class VoiceClient {
       this.setStatus('麦克风就绪，按住说话', 'idle');
     } catch (error) {
       await this.disarm(false);
-      this.setStatus(error.message || '无法开启麦克风', 'error');
+      this.setStatus(this._friendlyError(error), 'error');
     } finally {
       this.arming = false;
       this.toggle.disabled = false;
     }
+  }
+
+  _friendlyError(error) {
+    const name = error && error.name;
+    if (name === 'NotAllowedError' || name === 'SecurityError') {
+      return '麦克风被拦住了：请在地址栏权限图标里把「麦克风」设为允许,再按一次';
+    }
+    if (name === 'NotFoundError') {
+      return '没找到麦克风设备,请检查是否插好/被占用';
+    }
+    if (location.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(location.hostname)) {
+      return '当前不是安全地址,麦克风需用 https 或 127.0.0.1 打开';
+    }
+    return (error && error.message) || '无法开启麦克风';
   }
 
   async connect() {
