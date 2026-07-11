@@ -1,36 +1,60 @@
+// 按键对讲(push-to-talk):按住麦克风按钮说话,松开发送。无需唤醒词。
 class VoiceClient {
   constructor() {
     this.toggle = document.getElementById('micToggle');
     this.status = document.getElementById('voiceStatus');
     this.transcript = document.getElementById('voiceTranscript');
-    this.desired = false;
     this.socket = null;
     this.stream = null;
     this.context = null;
     this.worklet = null;
-    this.reconnectTimer = null;
     this.config = null;
-    this.toggle.addEventListener('click', () => this.desired ? this.stop() : this.start());
+    this.armed = false;      // 已获权限+连接,随时可按住说话
+    this.arming = false;     // 正在初始化麦克风
+    this.recording = false;  // 正在按住录音
+    this.pressing = false;   // 指针当前按下
+
+    // 按住说话:按下开录、松开/移开/取消都视为松手。
+    this.toggle.addEventListener('pointerdown', e => { e.preventDefault(); this.onPressStart(); });
+    this.toggle.addEventListener('pointerup', () => this.onPressEnd());
+    this.toggle.addEventListener('pointercancel', () => this.onPressEnd());
+    this.toggle.addEventListener('pointerleave', () => { if (this.pressing) this.onPressEnd(); });
+    // 长按可能弹出的系统上下文菜单,禁掉。
+    this.toggle.addEventListener('contextmenu', e => e.preventDefault());
   }
 
-  async start() {
+  async onPressStart() {
+    this.pressing = true;
+    if (!this.armed) {
+      await this.arm();
+    }
+    // 初始化过程中若已松手,则只保持就绪,不录音。
+    if (this.armed && this.pressing) {
+      this.beginRecording();
+    }
+  }
+
+  onPressEnd() {
+    this.pressing = false;
+    if (this.recording) {
+      this.endRecording();
+    }
+  }
+
+  // 首次按下:请求权限 + 建立连接 + 音频管线。
+  async arm() {
+    if (this.arming || this.armed) return;
+    this.arming = true;
     this.toggle.disabled = true;
-    this.setStatus('正在请求麦克风权限', 'connecting');
+    this.setStatus('正在准备麦克风…', 'connecting');
     try {
       const response = await fetch('/api/voice-config');
       this.config = await response.json();
       if (!this.config.enabled) throw new Error('语音服务已关闭');
-      if (!this.config.ready) {
-        throw new Error(`语音服务未配置：${this.config.missing.join(', ')}`);
-      }
+      if (!this.config.ready) throw new Error(`语音服务未配置：${this.config.missing.join(', ')}`);
 
       this.stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
       this.context = new AudioContext({latencyHint: 'interactive'});
       await this.context.audioWorklet.addModule('/static/pcm-worklet.js');
@@ -39,29 +63,27 @@ class VoiceClient {
       const mute = this.context.createGain();
       mute.gain.value = 0;
       source.connect(this.worklet).connect(mute).connect(this.context.destination);
+      // 只在按住录音时把音频发给网关。
       this.worklet.port.onmessage = event => {
-        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+        if (this.recording && this.socket && this.socket.readyState === WebSocket.OPEN) {
           this.socket.send(event.data);
         }
       };
-      this.desired = true;
-      this.toggle.setAttribute('aria-pressed', 'true');
-      this.toggle.classList.add('active');
       await this.connect();
+      this.armed = true;
+      this.setStatus('麦克风就绪，按住说话', 'idle');
     } catch (error) {
-      await this.stop(false);
+      await this.disarm(false);
       this.setStatus(error.message || '无法开启麦克风', 'error');
     } finally {
+      this.arming = false;
       this.toggle.disabled = false;
     }
   }
 
   async connect() {
-    if (!this.desired) return;
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
     const url = `${scheme}://${location.hostname}:${this.config.port}/ws/voice`;
-    this.setStatus('正在连接语音服务', 'connecting');
-
     await new Promise((resolve, reject) => {
       const socket = new WebSocket(url);
       socket.binaryType = 'arraybuffer';
@@ -72,31 +94,45 @@ class VoiceClient {
         socket.send(JSON.stringify({type: 'start', sampleRate: 16000}));
         resolve();
       };
-      socket.onerror = () => {
-        clearTimeout(timeout);
-        reject(new Error('无法连接语音服务'));
-      };
+      socket.onerror = () => { clearTimeout(timeout); reject(new Error('无法连接语音服务')); };
       socket.onmessage = event => this.onMessage(event.data);
       socket.onclose = () => {
-        if (!this.desired) return;
-        this.setStatus('语音连接中断，正在重连', 'error');
-        clearTimeout(this.reconnectTimer);
-        this.reconnectTimer = setTimeout(() => this.connect().catch(() => {}), 1000);
+        if (!this.armed) return;
+        this.armed = false;
+        this.recording = false;
+        this.toggle.classList.remove('active');
+        this.setStatus('语音连接已断开，请再按一次', 'error');
       };
     });
   }
 
+  beginRecording() {
+    if (!this.armed || this.recording) return;
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    this.recording = true;
+    this.socket.send(JSON.stringify({type: 'speak_start'}));
+    this.toggle.setAttribute('aria-pressed', 'true');
+    this.toggle.classList.add('active');
+    this.setStatus('正在录音，请说…', 'listening');
+    this.transcript.textContent = '……';
+  }
+
+  endRecording() {
+    if (!this.recording) return;
+    this.recording = false;
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify({type: 'speak_end'}));
+    }
+    this.toggle.setAttribute('aria-pressed', 'false');
+    this.toggle.classList.remove('active');
+    this.setStatus('正在识别…', 'connecting');
+  }
+
   onMessage(raw) {
     let event;
-    try {
-      event = JSON.parse(raw);
-    } catch (_) {
-      return;
-    }
+    try { event = JSON.parse(raw); } catch (_) { return; }
     if (event.type === 'status') {
       this.setStatus(event.message, event.state);
-    } else if (event.type === 'wake_detected') {
-      this.setStatus('已唤醒，我在听', 'listening');
     } else if (event.type === 'final_transcript') {
       this.transcript.textContent = event.text;
       window.dispatchEvent(new CustomEvent('hey-rice-final-transcript', {detail: event}));
@@ -104,15 +140,16 @@ class VoiceClient {
       window.dispatchEvent(new CustomEvent('hey-rice-agent-result', {detail: event}));
     } else if (event.type === 'error') {
       this.setStatus(event.message, 'error');
-      if (['voice_not_configured', 'wakeword_not_ready'].includes(event.code)) {
-        this.stop(false).then(() => this.setStatus(event.message, 'error'));
+      if (event.code === 'voice_not_configured') {
+        this.disarm(false).then(() => this.setStatus(event.message, 'error'));
       }
     }
   }
 
-  async stop(updateStatus = true) {
-    this.desired = false;
-    clearTimeout(this.reconnectTimer);
+  async disarm(updateStatus = true) {
+    this.armed = false;
+    this.recording = false;
+    this.pressing = false;
     if (this.socket) {
       if (this.socket.readyState === WebSocket.OPEN) {
         this.socket.send(JSON.stringify({type: 'stop'}));

@@ -61,6 +61,7 @@
     border: 1px solid var(--line); background: var(--paper); color: var(--teal);
     font-size: 1.35rem; display: grid; place-items: center;
     transition: background .15s ease, color .15s ease, transform .15s ease;
+    touch-action: none; -webkit-user-select: none; user-select: none;
   }
   .mic-toggle:hover { transform: translateY(-1px); }
   .mic-toggle.active {
@@ -219,10 +220,10 @@
 
   <section class="voice-panel" aria-label="语音输入">
     <button class="mic-toggle" id="micToggle" type="button"
-            aria-label="开启或关闭麦克风" aria-pressed="false" title="开启或关闭麦克风">&#127908;</button>
+            aria-label="按住说话，松开发送" aria-pressed="false" title="按住说话，松开发送">&#127908;</button>
     <div class="voice-copy">
       <span class="voice-status" id="voiceStatus" data-state="idle" role="status" aria-live="polite">麦克风已关闭</span>
-      <output class="voice-transcript" id="voiceTranscript">点亮麦克风,说一次“小瓜小瓜”唤醒;之后直接说话即可,说“不吃了”就结束</output>
+      <output class="voice-transcript" id="voiceTranscript">按住上面的麦克风说话，松开就发送</output>
     </div>
   </section>
 
@@ -244,7 +245,7 @@
     <button data-t="今天天气真好啊">闲聊一句</button>
     <button data-t="别停">别停</button>
   </div>
-  <p class="hint">说一次“小瓜小瓜”唤醒后可连续对话(说“不吃了”或静置一会儿结束),也可直接打字;命令会触发机械臂动作(当前为演示)。</p>
+  <p class="hint">按住麦克风说话、松开发送,也可直接打字;命令会触发机械臂动作(当前为演示)。</p>
 </div>
 
 <script>
