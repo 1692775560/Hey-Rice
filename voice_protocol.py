@@ -44,8 +44,9 @@ def _object_json(raw: str | bytes) -> dict[str, Any]:
 def parse_browser_control(raw: str | bytes) -> BrowserControl:
     value = _object_json(raw)
     message_type = value.get("type")
-    if message_type == "stop":
-        return BrowserControl(type="stop")
+    # 按键对讲:speak_start 按下开录、speak_end 松开定稿;stop 关麦。
+    if message_type in ("stop", "speak_start", "speak_end"):
+        return BrowserControl(type=message_type)
     if message_type != "start":
         raise ProtocolError(f"unsupported browser message type: {message_type!r}")
 

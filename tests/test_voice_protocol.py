@@ -25,6 +25,11 @@ class BrowserControlTests(unittest.TestCase):
         with self.assertRaisesRegex(ProtocolError, "unsupported"):
             parse_browser_control('{"type":"wake"}')
 
+    def test_push_to_talk_controls_are_accepted(self):
+        for kind in ("speak_start", "speak_end", "stop"):
+            message = parse_browser_control(json.dumps({"type": kind}))
+            self.assertEqual(message.type, kind)
+
     def test_control_rejects_non_object_json(self):
         with self.assertRaisesRegex(ProtocolError, "object"):
             parse_browser_control('["start"]')
