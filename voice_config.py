@@ -34,6 +34,7 @@ class VoiceConfig:
     no_speech_ms: int
     max_duration_ms: int
     speech_threshold: float
+    conversation_timeout_ms: int
     embedded_agent: bool
 
     @classmethod
@@ -62,6 +63,9 @@ class VoiceConfig:
             max_duration_ms=int(os.environ.get("MEALMATE_MAX_UTTERANCE_MS", "12000")),
             speech_threshold=float(
                 os.environ.get("MEALMATE_SPEECH_THRESHOLD", "500")
+            ),
+            conversation_timeout_ms=int(
+                os.environ.get("MEALMATE_CONVERSATION_MS", "600000")  # 10 分钟无交互则结束会话
             ),
             embedded_agent=_bool_env("MEALMATE_EMBED_AGENT", True),
         )
