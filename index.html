@@ -66,10 +66,19 @@
   .mic-toggle.active {
     background: linear-gradient(135deg, var(--teal), #2b8f92);
     color: #fffaf4; border-color: transparent;
+    animation: mic-pulse 1.8s ease-out infinite;
   }
   .mic-toggle:disabled { opacity: .55; cursor: wait; transform: none; }
+  /* 麦克风开启时的呼吸光圈,直观提示"正在听" */
+  @keyframes mic-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(29,109,115,.45); }
+    70%  { box-shadow: 0 0 0 12px rgba(29,109,115,0); }
+    100% { box-shadow: 0 0 0 0 rgba(29,109,115,0); }
+  }
   .voice-copy { min-width: 0; }
   .voice-status { display: block; color: var(--teal); font-weight: 700; font-size: .9rem; }
+  .voice-status[data-state="connecting"] { color: var(--gold); }
+  .voice-status[data-state="listening"]  { color: var(--teal); }
   .voice-status[data-state="error"] { color: var(--accent); }
   .voice-transcript {
     display: block; min-height: 1.4em; margin-top: 3px; color: var(--muted);
@@ -183,6 +192,11 @@
     .status-pill { font-size: .72rem; padding: 6px 8px; }
     .bubble { max-width: 84%; }
     .send { padding: 0 16px; }
+  }
+
+  /* 尊重系统"减少动态效果"设置(晕动敏感/无障碍) */
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
   }
 </style>
 </head>
