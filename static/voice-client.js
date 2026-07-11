@@ -1,4 +1,4 @@
-// 按键对讲(push-to-talk):按住麦克风按钮说话,松开发送。无需唤醒词。
+// 语音输入:按空格键(或点麦克风按钮)开始录音,再按一次结束。无需唤醒词。
 class VoiceClient {
   constructor() {
     this.toggle = document.getElementById('micToggle');
@@ -9,36 +9,30 @@ class VoiceClient {
     this.context = null;
     this.worklet = null;
     this.config = null;
-    this.armed = false;      // 已获权限+连接,随时可按住说话
+    this.armed = false;      // 已获权限+连接,随时可开录
     this.arming = false;     // 正在初始化麦克风
-    this.recording = false;  // 正在按住录音
-    this.pressing = false;   // 指针当前按下
+    this.recording = false;  // 正在录音
 
-    // 按住说话:按下开录、松开/移开/取消都视为松手。
-    this.toggle.addEventListener('pointerdown', e => { e.preventDefault(); this.onPressStart(); });
-    this.toggle.addEventListener('pointerup', () => this.onPressEnd());
-    this.toggle.addEventListener('pointercancel', () => this.onPressEnd());
-    this.toggle.addEventListener('pointerleave', () => { if (this.pressing) this.onPressEnd(); });
-    // 长按可能弹出的系统上下文菜单,禁掉。
-    this.toggle.addEventListener('contextmenu', e => e.preventDefault());
+    // 点按钮切换录音;空格键切换录音(不在输入框/按钮聚焦时)。
+    this.toggle.addEventListener('click', () => this.toggleRecording());
+    document.addEventListener('keydown', e => this.onKeyDown(e));
   }
 
-  async onPressStart() {
-    this.pressing = true;
-    if (!this.armed) {
-      await this.arm();
+  onKeyDown(e) {
+    if (e.code !== 'Space' || e.repeat) return;
+    const el = document.activeElement;
+    if (el === this.toggle) return;   // 焦点在按钮上时,交给按钮自身的空格→点击
+    if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT' || el.isContentEditable)) {
+      return;   // 在输入框里空格应正常打字
     }
-    // 初始化过程中若已松手,则只保持就绪,不录音。
-    if (this.armed && this.pressing) {
-      this.beginRecording();
-    }
+    e.preventDefault();               // 否则空格会滚动页面
+    this.toggleRecording();
   }
 
-  onPressEnd() {
-    this.pressing = false;
-    if (this.recording) {
-      this.endRecording();
-    }
+  async toggleRecording() {
+    if (this.recording) { this.endRecording(); return; }
+    if (!this.armed) { await this.arm(); }
+    if (this.armed && !this.recording) this.beginRecording();
   }
 
   // 首次按下:请求权限 + 建立连接 + 音频管线。
@@ -129,7 +123,7 @@ class VoiceClient {
     this.socket.send(JSON.stringify({type: 'speak_start'}));
     this.toggle.setAttribute('aria-pressed', 'true');
     this.toggle.classList.add('active');
-    this.setStatus('正在录音，请说…', 'listening');
+    this.setStatus('正在录音…（再按空格或点按钮结束）', 'listening');
     this.transcript.textContent = '……';
   }
 
@@ -165,7 +159,6 @@ class VoiceClient {
   async disarm(updateStatus = true) {
     this.armed = false;
     this.recording = false;
-    this.pressing = false;
     if (this.socket) {
       if (this.socket.readyState === WebSocket.OPEN) {
         this.socket.send(JSON.stringify({type: 'stop'}));
