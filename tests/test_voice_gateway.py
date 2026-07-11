@@ -29,6 +29,7 @@ def test_config():
         no_speech_ms=4000,
         max_duration_ms=12000,
         speech_threshold=500,
+        conversation_timeout_ms=600000,
         embedded_agent=True,
     )
 
@@ -107,9 +108,28 @@ class FakeAgentHub:
     def __init__(self):
         self.events = []
 
-    async def publish(self, event, browser):
-        self.events.append((event, browser))
+    async def publish(self, event, session):
+        self.events.append((event, session))
         return True
+
+
+class FakeSession:
+    """AgentHub 测试用:记录并把 agent 结果转发给内部浏览器 socket。"""
+    def __init__(self, browser):
+        self.browser = browser
+        self.delivered = []
+
+    async def deliver_agent_result(self, request_id, result):
+        self.delivered.append((request_id, result))
+        try:
+            await self.browser.send(
+                json.dumps(
+                    {"type": "agent_result", "requestId": request_id, "result": result},
+                    ensure_ascii=False,
+                )
+            )
+        except Exception:
+            return
 
 
 def decoded_messages(socket):
@@ -174,8 +194,10 @@ class VoiceSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(event["text"], "我想吃饭")
         self.assertEqual(asr.finish_count, 1)
         self.assertTrue(asr.closed)
-        self.assertEqual(wake.reset_count, 2)
-        self.assertEqual(session.state, SessionState.WAITING_WAKE)
+        # 唤醒一次后进入持续对话:说完一句不再要求唤醒,停在 CONVERSING。
+        self.assertEqual(wake.reset_count, 1)
+        self.assertEqual(session.state, SessionState.CONVERSING)
+        self.assertTrue(session.conversing)
         browser_events = decoded_messages(browser)
         self.assertEqual(
             len([item for item in browser_events if item["type"] == "final_transcript"]),
@@ -222,6 +244,58 @@ class VoiceSessionTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(session.state, SessionState.IDLE)
 
+    async def test_wake_once_then_second_utterance_needs_no_wake(self):
+        browser = FakeSocket()
+        wake = FakeWakeDetector([True])   # 只提供一次唤醒命中
+        hub = FakeAgentHub()
+        asrs = []
+
+        def make_asr():
+            a = FakeAsr("我想吃饭")
+            asrs.append(a)
+            return a
+
+        config = replace(
+            test_config(), silence_ms=100, no_speech_ms=300, max_duration_ms=1000
+        )
+        session = VoiceSession(
+            browser, config, wake_detector=wake, asr_factory=make_asr, agent_hub=hub
+        )
+        await session.handle('{"type":"start","sampleRate":16000}')
+
+        # 第一句:唤醒 → 说话 → 静音
+        await session.handle(pcm(2000))   # 唤醒命中 → LISTENING
+        await session.handle(pcm(2000))
+        await session.handle(pcm(0))      # 静音 → 收尾 → CONVERSING
+        self.assertEqual(session.state, SessionState.CONVERSING)
+
+        # 第二句:不喊唤醒,直接说
+        await session.handle(pcm(2000))   # CONVERSING 检测到说话 → 新 ASR → LISTENING
+        await session.handle(pcm(2000))
+        await session.handle(pcm(0))      # 静音 → 收尾
+
+        self.assertEqual(len(hub.events), 2)       # 两句都上报
+        self.assertEqual(len(wake.received), 1)    # 唤醒检测只在第一句用了一次
+        self.assertEqual(len(asrs), 2)             # 两句各开一次 ASR
+        self.assertEqual(session.state, SessionState.CONVERSING)
+
+    async def test_stop_feed_result_ends_conversation(self):
+        asr = FakeAsr("不吃了")
+        session, browser, _, hub = self.make_session([True], asr)
+        await session.handle('{"type":"start","sampleRate":16000}')
+        await session.handle(pcm(2000))   # 唤醒 → LISTENING
+        await session.handle(pcm(2000))
+        await session.handle(pcm(0))      # 收尾 → CONVERSING
+        self.assertTrue(session.conversing)
+
+        request_id = hub.events[0][0]["requestId"]
+        await session.deliver_agent_result(
+            request_id, {"reply": "好的", "intent": "STOP_FEED"}
+        )
+
+        self.assertFalse(session.conversing)
+        self.assertEqual(session.state, SessionState.WAITING_WAKE)
+
 
 class AgentHubTests(unittest.IsolatedAsyncioTestCase):
     async def test_result_routes_to_originating_browser(self):
@@ -237,7 +311,7 @@ class AgentHubTests(unittest.IsolatedAsyncioTestCase):
             "timestamp": 1,
         }
 
-        delivered = await hub.publish(event, browser)
+        delivered = await hub.publish(event, FakeSession(browser))
         await hub.handle_message(
             agent,
             '{"type":"agent_result","requestId":"req-1","result":{"reply":"好"}}',
@@ -273,7 +347,7 @@ class AgentHubTests(unittest.IsolatedAsyncioTestCase):
     async def test_closed_browser_does_not_break_agent_result_handling(self):
         hub = AgentHub()
         agent = FakeSocket()
-        hub.pending["req-1"] = ClosedSocket()
+        hub.pending["req-1"] = FakeSession(ClosedSocket())
 
         await hub.handle_message(
             agent,
